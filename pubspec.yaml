@@ -42,6 +42,8 @@ dependencies:
   provider: ^6.1.5+1
   animate_do: ^4.2.0
   google_generative_ai: ^0.4.7
+  lottie: ^3.3.2
+  particles_flutter: ^1.0.1
 
 dev_dependencies:
   flutter_test:
@@ -59,11 +61,11 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  #any other assets like images can be added here
 
   # To add assets to your application, add an assets section, like this:
   # assets:

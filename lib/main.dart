@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sidebarx/sidebarx.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 void main() async {
@@ -10,7 +11,8 @@ void main() async {
 
   await Supabase.initialize(
     url: 'https://hugqwdfledpcsbupoagc.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
   );
 
   runApp(
@@ -50,7 +52,10 @@ class FluxGuardApp extends StatelessWidget {
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.teal,
+          brightness: Brightness.dark,
+        ),
         scaffoldBackgroundColor: Colors.grey[900],
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       ),
@@ -59,7 +64,7 @@ class FluxGuardApp extends StatelessWidget {
   }
 }
 
-// ────────────────────── LOGIN PAGE ──────────────────────
+// Login Page
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -80,12 +85,18 @@ class _LoginPageState extends State<LoginPage> {
         password: passCtrl.text,
       );
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Login failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -106,7 +117,9 @@ class _LoginPageState extends State<LoginPage> {
         child: Center(
           child: Card(
             elevation: 20,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
             margin: const EdgeInsets.all(32),
             child: Padding(
               padding: const EdgeInsets.all(48),
@@ -115,8 +128,21 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   const Icon(Icons.shield, size: 90, color: Colors.white),
                   const SizedBox(height: 24),
-                  Text('FluxGuard', style: GoogleFonts.inter(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
-                  Text('Smart Gas Monitoring', style: GoogleFonts.inter(color: Colors.white70, fontSize: 18)),
+                  Text(
+                    'FluxGuard',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Smart Gas Monitoring',
+                    style: GoogleFonts.inter(
+                      color: Colors.white70,
+                      fontSize: 18,
+                    ),
+                  ),
                   const SizedBox(height: 48),
                   TextField(
                     controller: emailCtrl,
@@ -124,7 +150,10 @@ class _LoginPageState extends State<LoginPage> {
                     decoration: InputDecoration(
                       labelText: 'Email',
                       labelStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(Icons.email, color: Colors.white70),
+                      prefixIcon: const Icon(
+                        Icons.email,
+                        color: Colors.white70,
+                      ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: const BorderSide(color: Colors.white54),
@@ -163,12 +192,20 @@ class _LoginPageState extends State<LoginPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.teal,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         elevation: 10,
                       ),
                       child: loading
                           ? const CircularProgressIndicator(color: Colors.teal)
-                          : Text('Login', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+                          : Text(
+                              'Login',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -181,7 +218,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ────────────────────── MAIN SCREEN WITH SIDEBAR ──────────────────────
+// Main Screen with sidebar
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -196,8 +233,8 @@ class _MainScreenState extends State<MainScreen> {
     DashboardPage(),
     AIChatPage(),
     AnalyticsPage(),
-    ReportsPage(),
-    SettingsPage(),
+    PlaceholderPage(title: 'Reports'),
+    PlaceholderPage(title: 'Settings'),
   ];
 
   @override
@@ -213,12 +250,22 @@ class _MainScreenState extends State<MainScreen> {
               width: 220,
               decoration: BoxDecoration(
                 color: theme.isDark ? Colors.grey[850] : Colors.white,
-                borderRadius: const BorderRadius.only(topRight: Radius.circular(20), bottomRight: Radius.circular(20)),
-                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                ),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 10),
+                ],
               ),
               textStyle: GoogleFonts.inter(fontSize: 15),
-              selectedTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.teal),
-              iconTheme: IconThemeData(color: theme.isDark ? Colors.white70 : Colors.black87),
+              selectedTextStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: Colors.teal,
+              ),
+              iconTheme: IconThemeData(
+                color: theme.isDark ? Colors.white70 : Colors.black87,
+              ),
               selectedIconTheme: const IconThemeData(color: Colors.teal),
               hoverColor: Colors.teal.withAlpha(50),
             ),
@@ -228,7 +275,15 @@ class _MainScreenState extends State<MainScreen> {
                 children: [
                   const Icon(Icons.shield, color: Colors.teal, size: 30),
                   if (extended) const SizedBox(width: 10),
-                  if (extended) Text('FluxGuard', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal)),
+                  if (extended)
+                    Text(
+                      'FluxGuard',
+                      style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -239,26 +294,12 @@ class _MainScreenState extends State<MainScreen> {
               SidebarXItem(icon: Icons.description, label: 'Reports'),
               SidebarXItem(icon: Icons.settings, label: 'Settings'),
             ],
-            footerBuilder: (context, extended) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: Icon(theme.isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.teal),
-                    onPressed: () => theme.toggle(),
-                  ),
-                  if (extended) const SizedBox(width: 10),
-                  if (extended) Text('Theme', style: GoogleFonts.inter(color: Colors.teal)),
-                ],
-              ),
-            ),
           ),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
-              child: screens[_controller.selectedIndex],
               key: ValueKey<int>(_controller.selectedIndex),
+              child: screens[_controller.selectedIndex],
             ),
           ),
         ],
@@ -267,7 +308,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ────────────────────── DASHBOARD PAGE ──────────────────────
+// IMPROVED DASHBOARD (without animation)
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
@@ -276,148 +317,172 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Dashboard', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 32),
-          GridView.count(
-            crossAxisCount: MediaQuery.of(context).size.width > 1200 ? 3 : 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 24,
-            crossAxisSpacing: 24,
-            childAspectRatio: 1.4,
-            children: [
-              StreamBuilder(
-                stream: supabase.from('meters').stream(primaryKey: ['id']).eq('id', meterId),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Card(child: Center(child: CircularProgressIndicator()));
-                  }
-                  final meter = snapshot.data![0];
-                  final credit = double.tryParse(meter['current_credit'].toString()) ?? 0.0;
-                  final valveOpen = meter['valve_status'] == true;
+          // Credit Balance Card
+          StreamBuilder(
+            stream: supabase
+                .from('meters')
+                .stream(primaryKey: ['id'])
+                .eq('id', meterId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text('No meter data yet'));
+              }
+              final meter = snapshot.data![0];
+              final credit =
+                  double.tryParse(meter['current_credit'].toString()) ?? 0.0;
+              final valveOpen = meter['valve_status'] == true;
 
-                  return Card(
-                    elevation: 15,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        gradient: LinearGradient(
-                          colors: credit < 20 ? [Colors.red[800]!, Colors.red[600]!] : [Colors.teal[800]!, Colors.teal[600]!],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              return Card(
+                elevation: 10,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [Colors.teal[800]!, Colors.teal[600]!],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Current Credit',
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 20,
                         ),
                       ),
-                      child: Column(
+                      Text(
+                        '\$${credit.toStringAsFixed(2)}',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 60,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.account_balance_wallet, size: 50, color: Colors.white),
-                          const SizedBox(height: 16),
-                          Text('Credit Balance', style: GoogleFonts.inter(color: Colors.white70, fontSize: 18)),
-                          Text('\$${credit.toStringAsFixed(2)}', style: GoogleFonts.inter(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(valveOpen ? Icons.lock_open : Icons.lock, color: valveOpen ? Colors.lightGreenAccent : Colors.redAccent, size: 30),
-                              const SizedBox(width: 8),
-                              Text(valveOpen ? 'Valve OPEN' : 'Valve CLOSED', style: GoogleFonts.inter(color: Colors.white, fontSize: 18)),
-                            ],
+                          Icon(
+                            valveOpen ? Icons.check_circle : Icons.cancel,
+                            color: valveOpen
+                                ? Colors.greenAccent
+                                : Colors.redAccent,
+                            size: 40,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 24,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  );
-                },
-              ),
-
-              Card(
-                elevation: 10,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.speed, size: 50, color: Colors.teal),
-                      const SizedBox(height: 16),
-                      Text('Gas Flow Rate', style: GoogleFonts.inter(fontSize: 18)),
-                      Text('5 L/min', style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.bold)),
-                      const Text('Normal', style: TextStyle(color: Colors.green)),
                     ],
                   ),
                 ),
-              ),
-
-              Card(
-                elevation: 10,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.warning_amber, size: 50, color: Colors.orange),
-                      const SizedBox(height: 16),
-                      Text('Leak Status', style: GoogleFonts.inter(fontSize: 18)),
-                      Text('None Detected', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+              );
+            },
           ),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
 
-          Text('Recent Alerts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
-
+          // Recent Top-ups
+          Text('Recent Top-ups', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
-
-          SizedBox(
-            height: 300,
-            child: StreamBuilder(
-              stream: supabase.from('alerts').stream(primaryKey: ['id']).eq('meter_id', meterId).order('timestamp', ascending: false).limit(5),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          StreamBuilder(
+            stream: supabase
+                .from('top_ups')
+                .stream(primaryKey: ['id'])
+                .eq('meter_id', meterId)
+                .order('timestamp', ascending: false)
+                .limit(5),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Text('No top-ups yet');
+              }
+              return Column(
+                children: snapshot.data!.map((topUp) {
+                  final amount =
+                      double.tryParse(topUp['amount'].toString()) ?? 0.0;
+                  final method = topUp['method'] ?? 'unknown';
+                  final timestamp = DateTime.parse(
+                    topUp['timestamp'],
+                  ).toLocal();
                   return Card(
-                    color: isDark ? Colors.grey[800] : Colors.grey[100],
-                    child: const Center(child: Text('No alerts — system stable', style: TextStyle(fontSize: 18))),
-                  );
-                }
-                return ListView.builder(
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, i) {
-                    final a = snapshot.data![i];
-                    final isLeak = a['type'] == 'leak';
-                    return Card(
-                      elevation: 6,
-                      color: isDark ? Colors.grey[800] : Colors.white,
-                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: CircleAvatar(
-                          backgroundColor: isLeak ? Colors.red : Colors.orange,
-                          child: const Icon(Icons.warning, color: Colors.white),
-                        ),
-                        title: Text(a['type'].toString().toUpperCase(), style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-                        subtitle: Text(a['message'], style: GoogleFonts.inter(fontSize: 15)),
-                        trailing: Text(DateTime.parse(a['timestamp']).toLocal().toString().substring(0, 16), style: GoogleFonts.inter(color: Colors.grey)),
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.add_circle,
+                        color: Colors.green,
                       ),
-                    );
-                  },
-                );
-              },
-            ),
+                      title: Text('+$amount'),
+                      subtitle: Text(method),
+                      trailing: Text(timestamp.toString().substring(0, 16)),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+
+          const SizedBox(height: 32),
+
+          // Alerts
+          Text('Alerts', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          StreamBuilder(
+            stream: supabase
+                .from('alerts')
+                .stream(primaryKey: ['id'])
+                .eq('meter_id', meterId)
+                .order('timestamp', ascending: false),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Text('No alerts');
+              }
+              return Column(
+                children: snapshot.data!.map((alert) {
+                  final type = alert['type'] ?? 'Unknown';
+                  final message = alert['message'] ?? 'No message';
+                  final timestamp = DateTime.parse(
+                    alert['timestamp'],
+                  ).toLocal();
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    color: Colors.red[900],
+                    child: ListTile(
+                      leading: const Icon(Icons.warning, color: Colors.yellow),
+                      title: Text(type),
+                      subtitle: Text(message),
+                      trailing: Text(timestamp.toString().substring(0, 16)),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
         ],
       ),
@@ -425,7 +490,7 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-// ────────────────────── REAL AI CHAT PAGE (Gemini) ──────────────────────
+// AI Chat Page
 class AIChatPage extends StatefulWidget {
   const AIChatPage({super.key});
 
@@ -439,7 +504,7 @@ class _AIChatPageState extends State<AIChatPage> {
   bool _loading = false;
 
   final GenerativeModel _model = GenerativeModel(
-    model: 'gemini-1.5-flash',
+    model: 'gemini-1.5-flash-latest',
     apiKey: 'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A',
   );
 
@@ -459,7 +524,10 @@ class _AIChatPageState extends State<AIChatPage> {
       final response = await _model.generateContent(content);
 
       setState(() {
-        _messages.add({'role': 'model', 'text': response.text ?? 'No response'});
+        _messages.add({
+          'role': 'model',
+          'text': response.text ?? 'No response',
+        });
         _loading = false;
       });
     } catch (e) {
@@ -484,25 +552,34 @@ class _AIChatPageState extends State<AIChatPage> {
               final msg = _messages[index];
               final isUser = msg['role'] == 'user';
               return Align(
-                alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                alignment: isUser
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 600),
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isUser ? Colors.teal : (isDark ? Colors.grey[800] : Colors.grey[200]),
+                    color: isUser
+                        ? Colors.teal
+                        : (isDark ? Colors.grey[800] : Colors.grey[200]),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     msg['text']!,
-                    style: GoogleFonts.inter(color: isUser ? Colors.white : null),
+                    style: GoogleFonts.inter(
+                      color: isUser ? Colors.white : null,
+                    ),
                   ),
                 ),
               );
             },
           ),
         ),
-        if (_loading) const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: CircularProgressIndicator(),
+          ),
         Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -514,7 +591,10 @@ class _AIChatPageState extends State<AIChatPage> {
                     hintText: 'Ask about your gas meter...',
                     filled: true,
                     fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
@@ -532,27 +612,207 @@ class _AIChatPageState extends State<AIChatPage> {
   }
 }
 
-// Placeholder pages
+// Analytics Page
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
+
+  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text('Analytics', style: Theme.of(context).textTheme.headlineMedium));
+    final supabase = Supabase.instance.client;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Analytics',
+            style: GoogleFonts.inter(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          Text(
+            'Gas Usage Last 30 Days',
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 400,
+            child: StreamBuilder(
+              stream: supabase
+                  .from('readings')
+                  .stream(primaryKey: ['id'])
+                  .eq('meter_id', meterId)
+                  .order('timestamp', ascending: true)
+                  .limit(30),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No usage data yet. Add readings in Supabase.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  );
+                }
+                final data = snapshot.data!;
+                final spots = data.asMap().entries.map((e) {
+                  final usage =
+                      double.tryParse(e.value['total_usage'].toString()) ?? 0.0;
+                  return FlSpot(e.key.toDouble(), usage);
+                }).toList();
+
+                return LineChart(
+                  LineChartData(
+                    gridData: const FlGridData(show: true),
+                    titlesData: FlTitlesData(
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 32,
+                          getTitlesWidget: (value, meta) => Text(
+                            'Day ${value.toInt() + 1}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 40,
+                        ),
+                      ),
+                    ),
+                    borderData: FlBorderData(show: true),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        color: Colors.teal,
+                        barWidth: 4,
+                        dotData: const FlDotData(show: true),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Summary Stats
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Summary',
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Average Daily Usage',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Text(
+                        '4.2 L/day',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total Usage This Month',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Text(
+                        '126 L',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Estimated Days Left',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Text(
+                        '19 days',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class ReportsPage extends StatelessWidget {
-  const ReportsPage({super.key});
-  @override
-  Widget build(BuildContext context) {
-    return Center(child: Text('Reports', style: Theme.of(context).textTheme.headlineMedium));
-  }
-}
+// Placeholder pages
+class PlaceholderPage extends StatelessWidget {
+  final String title;
+  const PlaceholderPage({super.key, required this.title});
 
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text('Settings', style: Theme.of(context).textTheme.headlineMedium));
+    return Center(
+      child: Text(title, style: Theme.of(context).textTheme.headlineMedium),
+    );
   }
 }
