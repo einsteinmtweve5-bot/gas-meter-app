@@ -308,7 +308,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// IMPROVED DASHBOARD (without animation)
+// Dashboard Page
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
@@ -403,7 +403,7 @@ class DashboardPage extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          // Recent Top-ups
+          // Recent Top-ups (using 'top_ups')
           Text('Recent Top-ups', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           StreamBuilder(
@@ -650,7 +650,7 @@ class AnalyticsPage extends StatelessWidget {
             height: 400,
             child: StreamBuilder(
               stream: supabase
-                  .from('readings')
+                  .from('consumption_logs')
                   .stream(primaryKey: ['id'])
                   .eq('meter_id', meterId)
                   .order('timestamp', ascending: true)
