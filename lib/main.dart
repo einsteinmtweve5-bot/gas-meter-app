@@ -219,6 +219,10 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 // Main Screen with sidebar
+// Main Screen with sidebar (fixed switching)
+// Main Screen with sidebar (fixed navigation)
+// Main Screen with sidebar (working navigation for all sidebarx versions)
+// Main Screen with sidebar (final fixed version)
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -236,6 +240,20 @@ class _MainScreenState extends State<MainScreen> {
     PlaceholderPage(title: 'Reports'),
     PlaceholderPage(title: 'Settings'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      setState(() {}); // Rebuild when sidebar index changes
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(() {});
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -670,7 +688,7 @@ class AnalyticsPage extends StatelessWidget {
                 final data = snapshot.data!;
                 final spots = data.asMap().entries.map((e) {
                   final usage =
-                      double.tryParse(e.value['total_usage'].toString()) ?? 0.0;
+                      double.tryParse(e.value['m3_total'].toString()) ?? 0.0;
                   return FlSpot(e.key.toDouble(), usage);
                 }).toList();
 
