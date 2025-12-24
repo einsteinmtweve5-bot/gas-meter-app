@@ -44,6 +44,7 @@ dependencies:
   google_generative_ai: ^0.4.7
   lottie: ^3.3.2
   particles_flutter: ^1.0.1
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:

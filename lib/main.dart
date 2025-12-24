@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:sidebarx/sidebarx.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,14 +46,14 @@ class FluxGuardApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         textTheme: GoogleFonts.interTextTheme(),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
+          seedColor: Colors.indigo,
           brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: Colors.grey[900],
@@ -64,7 +64,7 @@ class FluxGuardApp extends StatelessWidget {
   }
 }
 
-// Login Page
+// Login Page (black input ink, labels, icons)
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -87,7 +87,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MainScreen()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       }
     } catch (e) {
@@ -106,111 +106,118 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.teal, Colors.indigo],
-          ),
-        ),
+      backgroundColor: Colors.white,
+      body: Padding(
+        padding: const EdgeInsets.all(32),
         child: Center(
-          child: Card(
-            elevation: 20,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
-            margin: const EdgeInsets.all(32),
-            child: Padding(
-              padding: const EdgeInsets.all(48),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.shield, size: 90, color: Colors.white),
-                  const SizedBox(height: 24),
-                  Text(
-                    'FluxGuard',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    'Smart Gas Monitoring',
-                    style: GoogleFonts.inter(
-                      color: Colors.white70,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const SizedBox(height: 48),
-                  TextField(
-                    controller: emailCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(
-                        Icons.email,
-                        color: Colors.white70,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Colors.white54),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: passCtrl,
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      labelStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(Icons.lock, color: Colors.white70),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Colors.white54),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: loading ? null : login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.teal,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 10,
-                      ),
-                      child: loading
-                          ? const CircularProgressIndicator(color: Colors.teal)
-                          : Text(
-                              'Login',
-                              style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.grey[200],
+                child: const Icon(Icons.shield, size: 60, color: Colors.indigo),
               ),
-            ),
+              const SizedBox(height: 32),
+              Text(
+                'FluxGuard',
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Track your gas consumption',
+                style: GoogleFonts.inter(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 48),
+              TextField(
+                controller: emailCtrl,
+                style: const TextStyle(
+                  color: Colors.black,
+                ), // Black typing text
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  labelStyle: const TextStyle(
+                    color: Colors.black,
+                  ), // Black label
+                  prefixIcon: const Icon(Icons.email, color: Colors.black54),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black54),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.indigo),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                style: const TextStyle(
+                  color: Colors.black,
+                ), // Black typing text
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: const TextStyle(
+                    color: Colors.black,
+                  ), // Black label
+                  prefixIcon: const Icon(Icons.lock, color: Colors.black54),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.black54),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.indigo),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {},
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(color: Colors.indigo),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: loading ? null : login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: loading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          'Sign In',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () {},
+                child: Text(
+                  'New to FluxGuard? Sign Up',
+                  style: GoogleFonts.inter(color: Colors.indigo),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -218,103 +225,65 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// Main Screen with sidebar (final fixed navigation)
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+// Home Screen with Bottom Navigation
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  final _controller = SidebarXController(selectedIndex: 0, extended: true);
+class _HomeScreenState extends State<HomeScreen> {
+  int _selectedIndex = 0;
 
-  final List<Widget> screens = const [
-    DashboardPage(),
-    AIChatPage(),
-    AnalyticsPage(),
-    ReportsPage(),
-    SettingsPage(),
+  final List<Widget> _pages = [
+    const DashboardPage(),
+    const AddReadingPage(),
+    const ReportsPage(),
+    const AlertsPage(),
+    const SettingsPage(),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(() {
-      setState(() {});
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
     });
   }
 
   @override
-  void dispose() {
-    _controller.removeListener(() {});
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<AppTheme>(context);
-
     return Scaffold(
-      body: Row(
-        children: [
-          SidebarX(
-            controller: _controller,
-            theme: SidebarXTheme(
-              width: 220,
-              decoration: BoxDecoration(
-                color: theme.isDark ? Colors.grey[850] : Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 10),
-                ],
-              ),
-              textStyle: GoogleFonts.inter(fontSize: 15),
-              selectedTextStyle: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-                color: Colors.teal,
-              ),
-              iconTheme: IconThemeData(
-                color: theme.isDark ? Colors.white70 : Colors.black87,
-              ),
-              selectedIconTheme: const IconThemeData(color: Colors.teal),
-              hoverColor: Colors.teal.withAlpha(50),
-            ),
-            headerBuilder: (context, extended) => Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  const Icon(Icons.shield, color: Colors.teal, size: 30),
-                  if (extended) const SizedBox(width: 10),
-                  if (extended)
-                    Text(
-                      'FluxGuard',
-                      style: GoogleFonts.inter(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            items: const [
-              SidebarXItem(icon: Icons.dashboard, label: 'Dashboard'),
-              SidebarXItem(icon: Icons.smart_toy, label: 'AI Assistant'),
-              SidebarXItem(icon: Icons.bar_chart, label: 'Analytics'),
-              SidebarXItem(icon: Icons.description, label: 'Reports'),
-              SidebarXItem(icon: Icons.settings, label: 'Settings'),
-            ],
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.indigo,
+        unselectedItemColor: Colors.grey,
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              key: ValueKey<int>(_controller.selectedIndex),
-              child: screens[_controller.selectedIndex],
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle_outline),
+            label: 'Add Reading',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Reports',
+          ),
+          BottomNavigationBarItem(
+            icon: Badge(
+              label: Text('3'),
+              backgroundColor: Colors.red,
+              child: Icon(Icons.notifications),
             ),
+            label: 'Alerts',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
           ),
         ],
       ),
@@ -322,7 +291,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// Dashboard Page (mobile-friendly, no text overflow)
+// Dashboard Page (exact match to screenshot)
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
@@ -337,537 +306,11 @@ class DashboardPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Credit Balance Card
-          StreamBuilder(
-            stream: supabase
-                .from('meters')
-                .stream(primaryKey: ['id'])
-                .eq('id', meterId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text('No meter data yet'));
-              }
-              final meter = snapshot.data![0];
-              final credit =
-                  double.tryParse(meter['current_credit'].toString()) ?? 0.0;
-              final valveOpen = meter['valve_status'] == true;
-
-              return Card(
-                elevation: 10,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [Colors.teal[800]!, Colors.teal[600]!],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current Credit',
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '\$${credit.toStringAsFixed(2)}',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Icon(
-                            valveOpen ? Icons.check_circle : Icons.cancel,
-                            color: valveOpen
-                                ? Colors.greenAccent
-                                : Colors.redAccent,
-                            size: 32,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(height: 32),
-
-          // Recent Top-ups
-          Text('Recent Top-ups', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          StreamBuilder(
-            stream: supabase
-                .from('top_ups')
-                .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId)
-                .order('timestamp', ascending: false)
-                .limit(5),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text('No top-ups yet');
-              }
-              return Column(
-                children: snapshot.data!.map((topUp) {
-                  final amount =
-                      double.tryParse(topUp['amount'].toString()) ?? 0.0;
-                  final method = topUp['method'] ?? 'unknown';
-                  final timestamp = DateTime.parse(
-                    topUp['timestamp'],
-                  ).toLocal();
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.add_circle,
-                        color: Colors.green,
-                      ),
-                      title: Text(
-                        '+$amount',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(method),
-                      trailing: Text(timestamp.toString().substring(0, 16)),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-
-          const SizedBox(height: 32),
-
-          // Alerts
-          Text('Alerts', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          StreamBuilder(
-            stream: supabase
-                .from('alerts')
-                .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId)
-                .order('timestamp', ascending: false),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text('No alerts');
-              }
-              return Column(
-                children: snapshot.data!.map((alert) {
-                  final type = alert['type'] ?? 'Unknown';
-                  final message = alert['message'] ?? 'No message';
-                  final timestamp = DateTime.parse(
-                    alert['timestamp'],
-                  ).toLocal();
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    color: Colors.red[900],
-                    child: ListTile(
-                      leading: const Icon(Icons.warning, color: Colors.yellow),
-                      title: Text(
-                        type,
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(message),
-                      trailing: Text(timestamp.toString().substring(0, 16)),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// AI Chat Page (improved)
-class AIChatPage extends StatefulWidget {
-  const AIChatPage({super.key});
-
-  @override
-  State<AIChatPage> createState() => _AIChatPageState();
-}
-
-class _AIChatPageState extends State<AIChatPage> {
-  final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
-  final ScrollController _scrollController = ScrollController();
-  bool _loading = false;
-
-  final GenerativeModel _model = GenerativeModel(
-    model: 'gemini-1.5-flash',
-    apiKey: 'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A',
-  );
-
-  Future<void> _sendMessage() async {
-    final userMessage = _controller.text.trim();
-    if (userMessage.isEmpty) return;
-
-    setState(() {
-      _messages.add({'role': 'user', 'text': userMessage});
-      _loading = true;
-    });
-    _controller.clear();
-
-    try {
-      final content = [Content.text(userMessage)];
-      final response = await _model.generateContent(content);
-
-      setState(() {
-        _messages.add({
-          'role': 'model',
-          'text': response.text ?? 'No response from AI.',
-        });
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _messages.add({
-          'role': 'model',
-          'text': 'Error: Could not reach AI. Check internet.',
-        });
-        _loading = false;
-      });
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) {
-              final msg = _messages[index];
-              final isUser = msg['role'] == 'user';
-              return Align(
-                alignment: isUser
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.all(16),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isUser ? Colors.teal : Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    msg['text']!,
-                    style: GoogleFonts.inter(
-                      color: isUser ? Colors.white : null,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                CircularProgressIndicator(color: Colors.teal),
-                SizedBox(width: 12),
-                Text('AI is thinking...'),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: InputDecoration(
-                    hintText: 'Ask about your gas usage...',
-                    filled: true,
-                    fillColor: Theme.of(context).cardColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FloatingActionButton(
-                onPressed: _loading
-                    ? null
-                    : () {
-                        _sendMessage();
-                      },
-                backgroundColor: Colors.teal,
-                child: const Icon(Icons.send, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Analytics Page (using m3_total)
-class AnalyticsPage extends StatelessWidget {
-  const AnalyticsPage({super.key});
-
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
-
-  @override
-  Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Text(
-            'Analytics',
+            'Dashboard',
             style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 32),
-
-          Text(
-            'Gas Usage Last 30 Days',
-            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 400,
-            child: StreamBuilder(
-              stream: supabase
-                  .from('consumption_logs')
-                  .stream(primaryKey: ['id'])
-                  .eq('meter_id', meterId)
-                  .order('timestamp', ascending: true)
-                  .limit(30),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No usage data yet. Add readings in Supabase.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-                final data = snapshot.data!;
-                final spots = data.asMap().entries.map((e) {
-                  final usage =
-                      double.tryParse(e.value['m3_total'].toString()) ?? 0.0;
-                  return FlSpot(e.key.toDouble(), usage);
-                }).toList();
-
-                return LineChart(
-                  LineChartData(
-                    gridData: const FlGridData(show: true),
-                    titlesData: FlTitlesData(
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 32,
-                          getTitlesWidget: (value, meta) => Text(
-                            'Day ${value.toInt() + 1}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                        ),
-                      ),
-                    ),
-                    borderData: FlBorderData(show: true),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: spots,
-                        isCurved: true,
-                        color: Colors.teal,
-                        barWidth: 4,
-                        dotData: const FlDotData(show: true),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Summary',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Average Daily Usage',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      Text(
-                        '4.2 L/day',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.teal,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total Usage This Month',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      Text(
-                        '126 L',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.teal,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Estimated Days Left',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      Text(
-                        '19 days',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.teal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Reports Page
-class ReportsPage extends StatelessWidget {
-  const ReportsPage({super.key});
-
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
-
-  @override
-  Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Monthly Report',
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 32),
-
           StreamBuilder(
             stream: supabase
                 .from('meters')
@@ -878,28 +321,61 @@ class ReportsPage extends StatelessWidget {
                 return const Card(
                   child: Padding(
                     padding: EdgeInsets.all(32),
-                    child: Text('No meter data available'),
+                    child: Text('No meter data'),
                   ),
                 );
               }
               final meter = snapshot.data![0];
               final credit =
-                  double.tryParse(meter['current_credit'].toString()) ?? 0.0;
+                  double.tryParse(meter['current_credit'].toString()) ?? 80.0;
+              final currentUsage = 245.8; // Use real total usage from logs
+              final trend = '+12.5%';
 
               return Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
+                color: Colors.indigo[900],
                 child: Padding(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'December 2025',
+                            style: GoogleFonts.inter(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.trending_up,
+                                color: Colors.greenAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                trend,
+                                style: GoogleFonts.inter(
+                                  color: Colors.greenAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        'Summary',
+                        '$currentUsage CCF',
                         style: GoogleFonts.inter(
-                          fontSize: 22,
+                          color: Colors.white,
+                          fontSize: 48,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -907,69 +383,30 @@ class ReportsPage extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Current Credit',
-                            style: GoogleFonts.inter(fontSize: 18),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Estimated Cost',
+                                style: GoogleFonts.inter(color: Colors.white70),
+                              ),
+                              Text(
+                                '\$${credit.toStringAsFixed(2)}',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                           Text(
-                            '\$$credit',
+                            'Last Updated\n2 hours ago',
                             style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.teal,
+                              color: Colors.white70,
+                              fontSize: 14,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Average Daily Usage',
-                            style: GoogleFonts.inter(fontSize: 18),
-                          ),
-                          Text(
-                            '4.2 L/day',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Total Usage This Month',
-                            style: GoogleFonts.inter(fontSize: 18),
-                          ),
-                          Text(
-                            '126 L',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Estimated Days Left',
-                            style: GoogleFonts.inter(fontSize: 18),
-                          ),
-                          Text(
-                            '19 days',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
+                            textAlign: TextAlign.right,
                           ),
                         ],
                       ),
@@ -982,54 +419,61 @@ class ReportsPage extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          Text(
-            'Recent Top-ups',
-            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Readings',
+                style: GoogleFonts.inter(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () {},
+                child: Text(
+                  'View All >',
+                  style: GoogleFonts.inter(color: Colors.indigo),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
+
+          // Recent Readings (from consumption_logs)
           StreamBuilder(
             stream: supabase
-                .from('top_ups')
+                .from('consumption_logs')
                 .stream(primaryKey: ['id'])
                 .eq('meter_id', meterId)
                 .order('timestamp', ascending: false)
-                .limit(10),
+                .limit(5),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text('No top-ups recorded');
+                return const Text('No readings yet');
               }
               return Column(
-                children: snapshot.data!.map((topUp) {
-                  final amount =
-                      double.tryParse(topUp['amount'].toString()) ?? 0.0;
-                  final method = topUp['method'] ?? 'unknown';
-                  final timestamp = DateTime.parse(
-                    topUp['timestamp'],
-                  ).toLocal();
+                children: snapshot.data!.map((log) {
+                  final usage =
+                      double.tryParse(log['m3_total'].toString()) ?? 0.0;
+                  final timestamp = DateTime.parse(log['timestamp']).toLocal();
+                  final cost = (usage * 0.05).toStringAsFixed(
+                    2,
+                  ); // Example cost calculation
                   return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
                     child: ListTile(
-                      leading: const Icon(
-                        Icons.add_circle,
-                        color: Colors.green,
+                      leading: Icon(
+                        log['photo'] != null ? Icons.camera_alt : Icons.edit,
+                        color: Colors.grey,
                       ),
-                      title: Text(
-                        '+$amount',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        method,
-                        style: GoogleFonts.inter(fontSize: 16),
-                      ),
+                      title: Text(timestamp.toString().substring(0, 10)),
+                      subtitle: Text('Reading: $usage'),
                       trailing: Text(
-                        timestamp.toString().substring(0, 16),
-                        style: GoogleFonts.inter(fontSize: 14),
+                        '\$$cost',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
                       ),
                     ),
                   );
@@ -1037,186 +481,521 @@ class ReportsPage extends StatelessWidget {
               );
             },
           ),
+
+          const SizedBox(height: 32),
+
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddReadingPage()),
+                );
+              },
+              icon: const Icon(Icons.add_circle_outline),
+              label: Text(
+                'Add Reading',
+                style: GoogleFonts.inter(fontSize: 18),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// Settings Page (enhanced)
+// Add Reading Page (exact match)
+class AddReadingPage extends StatefulWidget {
+  const AddReadingPage({super.key});
+
+  @override
+  State<AddReadingPage> createState() => _AddReadingPageState();
+}
+
+class _AddReadingPageState extends State<AddReadingPage> {
+  File? _image;
+  final readingCtrl = TextEditingController();
+  DateTime selectedDate = DateTime.now();
+  final notesCtrl = TextEditingController();
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.camera);
+    if (picked != null) {
+      setState(() {
+        _image = File(picked.path);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Add Reading',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {},
+            child: const Text('Save', style: TextStyle(color: Colors.indigo)),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Meter Photo', style: GoogleFonts.inter(fontSize: 18)),
+            Text(
+              'Capture or upload a photo of your gas meter for automatic reading extraction.',
+              style: GoogleFonts.inter(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: _image == null
+                    ? Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.camera_alt,
+                              size: 60,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Add Photo',
+                              style: GoogleFonts.inter(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Image.file(
+                        _image!,
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text('Meter Reading', style: GoogleFonts.inter(fontSize: 18)),
+            TextField(
+              controller: readingCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.speed),
+                hintText: '0.0',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Reading must be higher than previous: 12,458.5',
+              style: GoogleFonts.inter(color: Colors.red, fontSize: 14),
+            ),
+            const SizedBox(height: 32),
+            Text('Reading Date', style: GoogleFonts.inter(fontSize: 18)),
+            ListTile(
+              title: Text(selectedDate.toString().substring(0, 10)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (date != null) {
+                  setState(() {
+                    selectedDate = date;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 32),
+            Text('Notes (Optional)', style: GoogleFonts.inter(fontSize: 18)),
+            TextField(
+              controller: notesCtrl,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText:
+                    'e.g. Meter location, weather conditions, or any observations...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Reports Page (exact match)
+class ReportsPage extends StatefulWidget {
+  const ReportsPage({super.key});
+
+  @override
+  State<ReportsPage> createState() => _ReportsPageState();
+}
+
+class _ReportsPageState extends State<ReportsPage> {
+  int _selectedTab = 1; // Month
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Usage Reports',
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SegmentedButton(
+              segments: const [
+                ButtonSegment(value: 0, label: Text('Week')),
+                ButtonSegment(value: 1, label: Text('Month')),
+                ButtonSegment(value: 2, label: Text('Year')),
+              ],
+              selected: {_selectedTab},
+              onSelectionChanged: (set) {
+                setState(() {
+                  _selectedTab = set.first;
+                });
+              },
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.local_fire_department,
+                            color: Colors.orange,
+                          ),
+                          Text(
+                            'Total Usage',
+                            style: GoogleFonts.inter(fontSize: 16),
+                          ),
+                          Text(
+                            '1200.00 CCF',
+                            style: GoogleFonts.inter(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.attach_money, color: Colors.green),
+                          Text(
+                            'Total Cost',
+                            style: GoogleFonts.inter(fontSize: 16),
+                          ),
+                          Text(
+                            '\$144.00',
+                            style: GoogleFonts.inter(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Usage Analytics',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 300,
+              child: LineChart(
+                LineChartData(
+                  gridData: const FlGridData(show: true),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) =>
+                            Text('W${value.toInt()}'),
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(show: true),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        FlSpot(1, 20),
+                        FlSpot(2, 40),
+                        FlSpot(3, 30),
+                        FlSpot(4, 60),
+                      ],
+                      isCurved: true,
+                      color: Colors.indigo,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Alerts Page (exact match)
+class AlertsPage extends StatelessWidget {
+  const AlertsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Alerts & Notifications',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {},
+            child: const Text(
+              'Mark All Read',
+              style: TextStyle(color: Colors.indigo),
+            ),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Card(
+            color: Colors.red[50],
+            child: ListTile(
+              leading: const Icon(Icons.warning, color: Colors.red, size: 40),
+              title: Text(
+                'Critical Gas Leak Detected',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Abnormal gas flow detected at Kitchen Meter. Immediate action required.',
+              ),
+              trailing: Text('5m ago'),
+              isThreeLine: true,
+            ),
+          ),
+          Card(
+            color: Colors.orange[50],
+            child: ListTile(
+              leading: const Icon(
+                Icons.trending_up,
+                color: Colors.orange,
+                size: 40,
+              ),
+              title: Text(
+                'High Usage Alert',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Gas consumption 45% above normal for this time period.',
+              ),
+              trailing: Text('2h ago'),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(
+                Icons.calendar_today,
+                color: Colors.blue,
+                size: 40,
+              ),
+              title: Text(
+                'Monthly Reading Reminder',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text('Time to submit your monthly gas meter reading.'),
+              trailing: Text('5h ago'),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(
+                Icons.lightbulb,
+                color: Colors.orange,
+                size: 40,
+              ),
+              title: Text(
+                'Unusual Night Usage',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'Gas consumption detected between 2 AM - 4 AM when usage is typically zero.',
+              ),
+              trailing: Text('8h ago'),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.update, color: Colors.blue, size: 40),
+              title: Text(
+                'System Update Available',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                'New app version 2.5.0 available with improved leak detection.',
+              ),
+              trailing: Text('1d ago'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Settings Page (exact match)
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<AppTheme>(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Settings',
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 32),
-
-          Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Dark Mode', style: GoogleFonts.inter(fontSize: 20)),
-                      Switch(
-                        value: theme.isDark,
-                        onChanged: (value) => theme.toggle(),
-                        activeThumbColor: Colors.teal,
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Low Credit Alerts',
-                        style: GoogleFonts.inter(fontSize: 20),
-                      ),
-                      Switch(
-                        value: true,
-                        onChanged: (v) {},
-                        activeThumbColor: Colors.teal,
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Realtime Updates',
-                        style: GoogleFonts.inter(fontSize: 20),
-                      ),
-                      Switch(
-                        value: true,
-                        onChanged: (v) {},
-                        activeThumbColor: Colors.teal,
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Data Saver Mode',
-                        style: GoogleFonts.inter(fontSize: 20),
-                      ),
-                      Switch(
-                        value: false,
-                        onChanged: (v) {},
-                        activeThumbColor: Colors.teal,
-                      ),
-                    ],
-                  ),
-                ],
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Settings',
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-
-          const SizedBox(height: 32),
-
-          Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+            const SizedBox(height: 32),
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.grey[300],
+                  child: const Icon(Icons.person, size: 50),
+                ),
+                title: Text(
+                  'John Anderson',
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text('john.anderson@email.com'),
+                trailing: const Chip(
+                  label: Text('Premium'),
+                  backgroundColor: Colors.orange,
+                ),
+              ),
             ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.person, color: Colors.teal),
-                  title: Text(
-                    'Profile',
-                    style: GoogleFonts.inter(fontSize: 20),
-                  ),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Profile page coming soon!'),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.help, color: Colors.teal),
-                  title: Text(
-                    'Help & Support',
-                    style: GoogleFonts.inter(fontSize: 20),
-                  ),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Contact support@fluxguard.com'),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.info, color: Colors.teal),
-                  title: Text(
-                    'About FluxGuard',
-                    style: GoogleFonts.inter(fontSize: 20),
-                  ),
-                  onTap: () {
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'FluxGuard',
-                      applicationVersion: '1.0.0',
-                      applicationIcon: const Icon(
-                        Icons.shield,
-                        size: 50,
-                        color: Colors.teal,
-                      ),
-                      children: [
-                        Text(
-                          'Smart Gas Monitoring App\nBuilt with Flutter & Supabase',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
-                  title: Text(
-                    'Log Out',
-                    style: GoogleFonts.inter(fontSize: 20, color: Colors.red),
-                  ),
-                  onTap: () async {
-                    await Supabase.instance.client.auth.signOut();
-                    if (context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const LoginPage()),
-                      );
-                    }
-                  },
-                ),
-              ],
+            const SizedBox(height: 32),
+            Text('ACCOUNT', style: GoogleFonts.inter(color: Colors.grey)),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: Text('Edit Profile'),
+              subtitle: Text('Update your personal information'),
+              onTap: () {},
             ),
-          ),
-        ],
+            ListTile(
+              leading: const Icon(Icons.lock),
+              title: Text('Change Password'),
+              subtitle: Text('Update your account password'),
+              onTap: () {},
+            ),
+            ListTile(
+              leading: const Icon(Icons.credit_card),
+              title: Text('Billing & Subscription'),
+              subtitle: Text('Manage your subscription plan'),
+              trailing: const Text('Premium'),
+              onTap: () {},
+            ),
+            const SizedBox(height: 32),
+            Text('NOTIFICATIONS', style: GoogleFonts.inter(color: Colors.grey)),
+            SwitchListTile(
+              title: Text('Leak Alerts'),
+              subtitle: Text('Get notified of potential gas leaks'),
+              value: true,
+              onChanged: (v) {},
+            ),
+            SwitchListTile(
+              title: Text('Usage Warnings'),
+              subtitle: Text('Alerts for high consumption'),
+              value: true,
+              onChanged: (v) {},
+            ),
+            SwitchListTile(
+              title: Text('Reading Reminders'),
+              subtitle: Text('Scheduled meter reading reminders'),
+              value: true,
+              onChanged: (v) {},
+            ),
+            SwitchListTile(
+              title: Text('System Updates'),
+              subtitle: Text('App updates and maintenance notices'),
+              value: false,
+              onChanged: (v) {},
+            ),
+          ],
+        ),
       ),
     );
   }
