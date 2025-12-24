@@ -505,6 +505,7 @@ class DashboardPage extends StatelessWidget {
 }
 
 // AI Chat Page
+// AI Chat Page (improved)
 class AIChatPage extends StatefulWidget {
   const AIChatPage({super.key});
 
@@ -515,11 +516,13 @@ class AIChatPage extends StatefulWidget {
 class _AIChatPageState extends State<AIChatPage> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
+  final ScrollController _scrollController = ScrollController();
   bool _loading = false;
 
   final GenerativeModel _model = GenerativeModel(
-    model: 'gemini-1.5-flash-latest',
-    apiKey: 'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A',
+    model: 'gemini-1.5-flash',
+    apiKey:
+        'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A', // Keep safe or use env later
   );
 
   Future<void> _sendMessage() async {
@@ -530,7 +533,6 @@ class _AIChatPageState extends State<AIChatPage> {
       _messages.add({'role': 'user', 'text': userMessage});
       _loading = true;
     });
-
     _controller.clear();
 
     try {
@@ -540,26 +542,37 @@ class _AIChatPageState extends State<AIChatPage> {
       setState(() {
         _messages.add({
           'role': 'model',
-          'text': response.text ?? 'No response',
+          'text': response.text ?? 'No response from AI.',
         });
         _loading = false;
       });
     } catch (e) {
       setState(() {
-        _messages.add({'role': 'model', 'text': 'Error: $e'});
+        _messages.add({
+          'role': 'model',
+          'text': 'Error: Could not reach AI. Check internet.',
+        });
         _loading = false;
       });
     }
+
+    // Auto-scroll to bottom
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Column(
       children: [
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: _messages.length,
             itemBuilder: (context, index) {
@@ -572,16 +585,18 @@ class _AIChatPageState extends State<AIChatPage> {
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   padding: const EdgeInsets.all(16),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.8,
+                  ),
                   decoration: BoxDecoration(
-                    color: isUser
-                        ? Colors.teal
-                        : (isDark ? Colors.grey[800] : Colors.grey[200]),
+                    color: isUser ? Colors.teal : Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     msg['text']!,
                     style: GoogleFonts.inter(
                       color: isUser ? Colors.white : null,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -592,7 +607,14 @@ class _AIChatPageState extends State<AIChatPage> {
         if (_loading)
           const Padding(
             padding: EdgeInsets.all(16),
-            child: CircularProgressIndicator(),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                CircularProgressIndicator(color: Colors.teal),
+                SizedBox(width: 12),
+                Text('AI is thinking...'),
+              ],
+            ),
           ),
         Padding(
           padding: const EdgeInsets.all(16),
@@ -602,19 +624,20 @@ class _AIChatPageState extends State<AIChatPage> {
                 child: TextField(
                   controller: _controller,
                   decoration: InputDecoration(
-                    hintText: 'Ask about your gas meter...',
+                    hintText: 'Ask about your gas usage...',
                     filled: true,
-                    fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                    fillColor: Theme.of(context).cardColor,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
                       borderSide: BorderSide.none,
                     ),
                   ),
+                  onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 12),
               FloatingActionButton(
-                onPressed: _sendMessage,
+                onPressed: _loading ? null : _sendMessage,
                 backgroundColor: Colors.teal,
                 child: const Icon(Icons.send, color: Colors.white),
               ),
@@ -676,7 +699,7 @@ class AnalyticsPage extends StatelessWidget {
                 final data = snapshot.data!;
                 final spots = data.asMap().entries.map((e) {
                   final usage =
-                      double.tryParse(e.value['m3_to_l'].toString()) ?? 0.0;
+                      double.tryParse(e.value['m3_total'].toString()) ?? 0.0;
                   return FlSpot(e.key.toDouble(), usage);
                 }).toList();
 
@@ -1009,6 +1032,7 @@ class ReportsPage extends StatelessWidget {
 }
 
 // Settings Page
+// Settings Page (enhanced)
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -1042,29 +1066,27 @@ class SettingsPage extends StatelessWidget {
                       Text('Dark Mode', style: GoogleFonts.inter(fontSize: 20)),
                       Switch(
                         value: theme.isDark,
-                        onChanged: (value) {
-                          theme.toggle();
-                        },
+                        onChanged: (value) => theme.toggle(),
                         activeThumbColor: Colors.teal,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const Divider(height: 32),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Push Notifications',
+                        'Low Credit Alerts',
                         style: GoogleFonts.inter(fontSize: 20),
                       ),
                       Switch(
                         value: true,
-                        onChanged: (value) {},
+                        onChanged: (v) {},
                         activeThumbColor: Colors.teal,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const Divider(height: 32),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1074,7 +1096,22 @@ class SettingsPage extends StatelessWidget {
                       ),
                       Switch(
                         value: true,
-                        onChanged: (value) {},
+                        onChanged: (v) {},
+                        activeThumbColor: Colors.teal,
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Data Saver Mode',
+                        style: GoogleFonts.inter(fontSize: 20),
+                      ),
+                      Switch(
+                        value: false,
+                        onChanged: (v) {},
                         activeThumbColor: Colors.teal,
                       ),
                     ],
@@ -1091,21 +1128,82 @@ class SettingsPage extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: Text(
-                'Log Out',
-                style: GoogleFonts.inter(fontSize: 20, color: Colors.red),
-              ),
-              onTap: () async {
-                await Supabase.instance.client.auth.signOut();
-                if (context.mounted) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                  );
-                }
-              },
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.person, color: Colors.teal),
+                  title: Text(
+                    'Profile',
+                    style: GoogleFonts.inter(fontSize: 20),
+                  ),
+                  onTap: () {
+                    // Future: open profile page
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Profile page coming soon!'),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.help, color: Colors.teal),
+                  title: Text(
+                    'Help & Support',
+                    style: GoogleFonts.inter(fontSize: 20),
+                  ),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Contact support@fluxguard.com'),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.info, color: Colors.teal),
+                  title: Text(
+                    'About FluxGuard',
+                    style: GoogleFonts.inter(fontSize: 20),
+                  ),
+                  onTap: () {
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'FluxGuard',
+                      applicationVersion: '1.0.0',
+                      applicationIcon: const Icon(
+                        Icons.shield,
+                        size: 50,
+                        color: Colors.teal,
+                      ),
+                      children: [
+                        Text(
+                          'Smart Gas Monitoring App\nBuilt with Flutter & Supabase',
+                          style: GoogleFonts.inter(),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: Text(
+                    'Log Out',
+                    style: GoogleFonts.inter(fontSize: 20, color: Colors.red),
+                  ),
+                  onTap: () async {
+                    await Supabase.instance.client.auth.signOut();
+                    if (context.mounted) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
           ),
         ],
