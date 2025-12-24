@@ -322,7 +322,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// Dashboard Page (your existing one)
+// Dashboard Page (mobile-friendly, no text overflow)
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
@@ -361,7 +361,8 @@ class DashboardPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Container(
-                  padding: const EdgeInsets.all(32),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     gradient: LinearGradient(
@@ -371,39 +372,43 @@ class DashboardPage extends StatelessWidget {
                     ),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Current Credit',
                         style: GoogleFonts.inter(
                           color: Colors.white70,
-                          fontSize: 20,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 8),
                       Text(
                         '\$${credit.toStringAsFixed(2)}',
                         style: GoogleFonts.inter(
                           color: Colors.white,
-                          fontSize: 60,
+                          fontSize: 48,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 16),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             valveOpen ? Icons.check_circle : Icons.cancel,
                             color: valveOpen
                                 ? Colors.greenAccent
                                 : Colors.redAccent,
-                            size: 40,
+                            size: 32,
                           ),
                           const SizedBox(width: 12),
                           Text(
                             valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
                             style: GoogleFonts.inter(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -449,7 +454,13 @@ class DashboardPage extends StatelessWidget {
                         Icons.add_circle,
                         color: Colors.green,
                       ),
-                      title: Text('+$amount'),
+                      title: Text(
+                        '+$amount',
+                        style: GoogleFonts.inter(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       subtitle: Text(method),
                       trailing: Text(timestamp.toString().substring(0, 16)),
                     ),
@@ -489,7 +500,10 @@ class DashboardPage extends StatelessWidget {
                     color: Colors.red[900],
                     child: ListTile(
                       leading: const Icon(Icons.warning, color: Colors.yellow),
-                      title: Text(type),
+                      title: Text(
+                        type,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                      ),
                       subtitle: Text(message),
                       trailing: Text(timestamp.toString().substring(0, 16)),
                     ),
@@ -504,7 +518,6 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-// AI Chat Page
 // AI Chat Page (improved)
 class AIChatPage extends StatefulWidget {
   const AIChatPage({super.key});
@@ -521,8 +534,7 @@ class _AIChatPageState extends State<AIChatPage> {
 
   final GenerativeModel _model = GenerativeModel(
     model: 'gemini-1.5-flash',
-    apiKey:
-        'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A', // Keep safe or use env later
+    apiKey: 'AIzaSyCra6qwYR7E06LBPnE4CAXVWaeMJrEvE2A',
   );
 
   Future<void> _sendMessage() async {
@@ -556,7 +568,6 @@ class _AIChatPageState extends State<AIChatPage> {
       });
     }
 
-    // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
@@ -637,7 +648,11 @@ class _AIChatPageState extends State<AIChatPage> {
               ),
               const SizedBox(width: 12),
               FloatingActionButton(
-                onPressed: _loading ? null : _sendMessage,
+                onPressed: _loading
+                    ? null
+                    : () {
+                        _sendMessage();
+                      },
                 backgroundColor: Colors.teal,
                 child: const Icon(Icons.send, color: Colors.white),
               ),
@@ -649,7 +664,7 @@ class _AIChatPageState extends State<AIChatPage> {
   }
 }
 
-// Analytics Page (with m3_to_l)
+// Analytics Page (using m3_total)
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
 
@@ -742,7 +757,6 @@ class AnalyticsPage extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          // Summary Stats (hardcoded for now)
           Card(
             elevation: 4,
             shape: RoundedRectangleBorder(
@@ -854,7 +868,6 @@ class ReportsPage extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // Summary Card
           StreamBuilder(
             stream: supabase
                 .from('meters')
@@ -969,7 +982,6 @@ class ReportsPage extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          // Recent Top-ups History
           Text(
             'Recent Top-ups',
             style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold),
@@ -1031,7 +1043,6 @@ class ReportsPage extends StatelessWidget {
   }
 }
 
-// Settings Page
 // Settings Page (enhanced)
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -1137,7 +1148,6 @@ class SettingsPage extends StatelessWidget {
                     style: GoogleFonts.inter(fontSize: 20),
                   ),
                   onTap: () {
-                    // Future: open profile page
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Profile page coming soon!'),
