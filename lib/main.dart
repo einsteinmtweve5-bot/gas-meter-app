@@ -3,27 +3,32 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-//import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-//import 'package:gas_meter_app/config.dart';
-//import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:syncfusion_flutter_gauges/gauges.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:ui'; // For BackdropFilter
 
-Future<void> main() async {
+class AppConfig {
+  static String get groqApiKey {
+    if (kIsWeb) {
+      return const String.fromEnvironment('GROQ_API_KEY',
+          defaultValue: 'no-key-web');
+    } else {
+      return 'your_mobile_key';
+    }
+  }
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Load your API key from .env file
-  //if (!kIsWeb) {
-  //await dotenv.load(fileName: ".env"); // Only on mobile — no 404 on web
-  //}
-
-  // ✅ Now initialize Supabase (or any other service that needs the key)
   await Supabase.initialize(
     url: 'https://hugqwdfledpcsbupoagc.supabase.co',
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
   );
-  // anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? 'no-key');
 
   runApp(
     ChangeNotifierProvider(
@@ -58,15 +63,12 @@ class FluxGuardApp extends StatelessWidget {
         brightness: Brightness.light,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         textTheme: GoogleFonts.interTextTheme(),
-        scaffoldBackgroundColor: Colors.grey[100],
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
+            seedColor: Colors.indigo, brightness: Brightness.dark),
         scaffoldBackgroundColor: Colors.black,
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       ),
@@ -75,8 +77,6 @@ class FluxGuardApp extends StatelessWidget {
   }
 }
 
-// Login Page - centered card + Google Sign Up
-// Login Page (blue gas flame background + centered semi-transparent box)
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -87,7 +87,6 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
-  bool rememberMe = false;
   bool loading = false;
 
   Future<void> login() async {
@@ -99,17 +98,13 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (mounted) {
         Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+            context, MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Login failed: $e'),
-            backgroundColor: Colors.red,
-          ),
+              content: Text('Login failed: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -124,9 +119,9 @@ class _LoginPageState extends State<LoginPage> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Google sign up failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google sign in failed: $e')),
+        );
       }
     }
   }
@@ -134,154 +129,140 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: NetworkImage(
-              'https://media.gettyimages.com/id/157612903/photo/gas-burner.jpg?s=1024x1024&w=gi&k=20&c=2yJixLIYdXOB51MH2wTv24-qiOO0TneL3qVUG38omJQ=', // Exact blue gas flame burner from your image
-            ),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Container(
-              margin: const EdgeInsets.all(32),
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.black.withAlpha(
-                  102,
-                ), // Semi-transparent black box
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withAlpha(51)),
+      resizeToAvoidBottomInset: true, // Prevents overflow when keyboard opens
+      body: SingleChildScrollView(
+        child: Container(
+          height: MediaQuery.of(context).size.height,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: NetworkImage(
+                'https://media.gettyimages.com/id/157612903/photo/gas-burner.jpg?s=1024x1024&w=gi&k=20&c=2yJixLIYdXOB51MH2wTv24-qiOO0TneL3qVUG38omJQ=',
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.shield, size: 80, color: Colors.white),
-                    const SizedBox(height: 24),
-                    Text(
-                      'FluxGuard',
-                      style: GoogleFonts.inter(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      'Smart Gas Monitoring',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    TextField(
-                      controller: emailCtrl,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Email Address',
-                        hintStyle: const TextStyle(color: Colors.white70),
-                        filled: true,
-                        fillColor: Colors.white.withAlpha(51),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  padding: const EdgeInsets.all(40),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.2), width: 1),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_fire_department,
+                          size: 80, color: Colors.orange[400]),
+                      const SizedBox(height: 24),
+                      Text(
+                        'FluxGuard',
+                        style: GoogleFonts.inter(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: passCtrl,
-                      obscureText: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Password',
-                        hintStyle: const TextStyle(color: Colors.white70),
-                        filled: true,
-                        fillColor: Colors.white.withAlpha(51),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                      Text(
+                        'Smart Gas Monitoring',
+                        style: GoogleFonts.inter(
+                            fontSize: 16, color: Colors.white70),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: rememberMe,
-                          onChanged: (v) => setState(() => rememberMe = v!),
-                          activeColor: Colors.orange,
-                        ),
-                        Text(
-                          'Remember Me',
-                          style: GoogleFonts.inter(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: loading ? null : login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 48),
+                      TextField(
+                        controller: emailCtrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Email Address',
+                          hintStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          prefixIcon:
+                              const Icon(Icons.email, color: Colors.white70),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
                           ),
                         ),
-                        child: loading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
-                              )
-                            : Text(
-                                'Sign in now',
-                                style: GoogleFonts.inter(
-                                  fontSize: 18,
-                                  color: Colors.white,
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: passCtrl,
+                        obscureText: true,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Password',
+                          hintStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.1),
+                          prefixIcon:
+                              const Icon(Icons.lock, color: Colors.white70),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: loading ? null : login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: loading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
+                              : Text(
+                                  'Sign in now',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 18, color: Colors.white),
                                 ),
-                              ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Center(
-                      child: TextButton(
+                      const SizedBox(height: 16),
+                      TextButton(
                         onPressed: () {},
-                        child: const Text(
-                          'Lost your password?',
-                          style: TextStyle(color: Colors.white),
-                        ),
+                        child: const Text('Lost your password?',
+                            style: TextStyle(color: Colors.white70)),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    Center(
-                      child: RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: GoogleFonts.inter(
-                            color: Colors.white70,
-                            fontSize: 12,
+                      const SizedBox(height: 32),
+                      const Text('OR',
+                          style:
+                              TextStyle(color: Colors.white70, fontSize: 16)),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          onPressed: signUpWithGoogle,
+                          icon: const Icon(Icons.account_circle,
+                              color: Colors.black87),
+                          label: Text(
+                            'Sign in with Google',
+                            style: GoogleFonts.inter(
+                                fontSize: 18, color: Colors.black87),
                           ),
-                          text: 'By clicking on "Sign in now", you agree to\n',
-                          children: const [
-                            TextSpan(
-                              text: 'Terms of Service',
-                              style: TextStyle(color: Colors.orange),
-                            ),
-                            TextSpan(text: ' | '),
-                            TextSpan(
-                              text: 'Privacy Policy',
-                              style: TextStyle(color: Colors.orange),
-                            ),
-                          ],
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -292,7 +273,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// Home Screen - no Add Reading
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -303,66 +283,58 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = [
-    const DashboardPage(),
-    const ReportsPage(),
-    const AlertsPage(),
-    const AIChatPage(),
-    const SettingsPage(),
+  final List<Widget> _pages = const [
+    DashboardPage(),
+    ReportsPage(),
+    AlertsPage(),
+    TopUpPage(),
+    AIChatPage(),
+    SettingsPage(),
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        key: ValueKey<int>(_selectedIndex),
-        child: _pages[_selectedIndex],
-      ),
+      body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.indigo,
-        unselectedItemColor: Colors.grey,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
+              icon: Icon(Icons.dashboard), label: 'Dashboard'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: 'Reports',
-          ),
+              icon: Icon(Icons.bar_chart), label: 'Reports'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications),
-            label: 'Alerts',
-          ),
+              icon: Icon(Icons.notifications), label: 'Alerts'),
+          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Top-Ups'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble),
-            label: 'AI Chat',
-          ),
+              icon: Icon(Icons.smart_toy), label: 'AI Chat'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+              icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );
   }
 }
 
-// Dashboard Page
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
   final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+
+  Future<void> _cacheData(
+      double credit, bool valveOpen, double flowRate) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('cached_credit', credit);
+    await prefs.setBool('cached_valve', valveOpen);
+    await prefs.setDouble('cached_flow', flowRate);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -373,126 +345,168 @@ class DashboardPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Dashboard',
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
+          Text('Dashboard',
+              style:
+                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           StreamBuilder(
             stream: supabase
                 .from('meters')
                 .stream(primaryKey: ['id']).eq('id', meterId),
             builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text('No meter data'),
-                  ),
-                );
-              }
-              final meter = snapshot.data![0];
-              final credit =
-                  double.tryParse(meter['current_credit'].toString()) ?? 80.0;
-              final valveOpen = meter['valve_status'] == true;
+              double credit = 80.0;
+              bool valveOpen = true;
+              double flowRate = 0.0;
+              bool isOffline = false;
 
-              return Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                color: Colors.indigo[900],
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current Credit',
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '\$${credit.toStringAsFixed(2)}',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                final meter = snapshot.data![0];
+                credit =
+                    double.tryParse(meter['current_credit'].toString()) ?? 80.0;
+                valveOpen = meter['valve_status'] == true;
+                flowRate =
+                    double.tryParse(meter['current_reading'].toString()) ?? 0.0;
+                _cacheData(credit, valveOpen, flowRate);
+              } else {
+                isOffline = true;
+                SharedPreferences.getInstance().then((prefs) {
+                  credit = prefs.getDouble('cached_credit') ?? 80.0;
+                  valveOpen = prefs.getBool('cached_valve') ?? true;
+                  flowRate = prefs.getDouble('cached_flow') ?? 0.0;
+                });
+              }
+
+              return Column(
+                children: [
+                  Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    color: Colors.indigo[900],
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            valveOpen ? Icons.check_circle : Icons.cancel,
-                            color: valveOpen
-                                ? Colors.greenAccent
-                                : Colors.redAccent,
-                            size: 32,
+                          if (isOffline)
+                            Text('Offline Mode',
+                                style: GoogleFonts.inter(
+                                    color: Colors.orange, fontSize: 16)),
+                          Text('Current Credit',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white70, fontSize: 18)),
+                          const SizedBox(height: 8),
+                          Text('\$${credit.toStringAsFixed(2)}',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(
+                                  valveOpen ? Icons.check_circle : Icons.cancel,
+                                  color: valveOpen
+                                      ? Colors.greenAccent
+                                      : Colors.redAccent,
+                                  size: 32),
+                              const SizedBox(width: 12),
+                              Text(valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
+                                  style: GoogleFonts.inter(
+                                      color: Colors.white, fontSize: 20)),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 20,
+                          const SizedBox(height: 32),
+                          Text('Current Gas Flow (FS300A Sensor)',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white, fontSize: 20)),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 250,
+                            child: SfRadialGauge(
+                              axes: <RadialAxis>[
+                                RadialAxis(
+                                  minimum: 0,
+                                  maximum: 6,
+                                  ranges: <GaugeRange>[
+                                    GaugeRange(
+                                        startValue: 0,
+                                        endValue: 2,
+                                        color: Colors.green),
+                                    GaugeRange(
+                                        startValue: 2,
+                                        endValue: 4,
+                                        color: Colors.yellow),
+                                    GaugeRange(
+                                        startValue: 4,
+                                        endValue: 6,
+                                        color: Colors.red),
+                                  ],
+                                  pointers: <GaugePointer>[
+                                    NeedlePointer(value: flowRate),
+                                  ],
+                                  annotations: <GaugeAnnotation>[
+                                    GaugeAnnotation(
+                                      widget: Text(
+                                          '${flowRate.toStringAsFixed(1)} L/min',
+                                          style: GoogleFonts.inter(
+                                              fontSize: 24,
+                                              color: Colors.white)),
+                                      angle: 90,
+                                      positionFactor: 0.8,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'Recent Top-ups',
-            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder(
-            stream: supabase
-                .from('top_ups')
-                .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId)
-                .order('timestamp', ascending: false)
-                .limit(5),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text('No top-ups yet');
-              }
-              return Column(
-                children: snapshot.data!.map((topUp) {
-                  final amount =
-                      double.tryParse(topUp['amount'].toString()) ?? 0.0;
-                  final method = topUp['method'] ?? 'unknown';
-                  final timestamp = DateTime.parse(
-                    topUp['timestamp'],
-                  ).toLocal();
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.add_circle,
-                        color: Colors.green,
-                      ),
-                      title: Text(
-                        '+$amount',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(method),
-                      trailing: Text(timestamp.toString().substring(0, 16)),
                     ),
-                  );
-                }).toList(),
+                  ),
+                  const SizedBox(height: 32),
+                  Text('Recent Top-ups',
+                      style: GoogleFonts.inter(
+                          fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  StreamBuilder(
+                    stream: supabase
+                        .from('top_ups')
+                        .stream(primaryKey: ['id'])
+                        .eq('meter_id', meterId)
+                        .order('timestamp', ascending: false)
+                        .limit(5),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Text('No top-ups yet');
+                      }
+                      return Column(
+                        children: snapshot.data!.map((topUp) {
+                          final amount =
+                              double.tryParse(topUp['amount'].toString()) ??
+                                  0.0;
+                          final method = topUp['method'] ?? 'unknown';
+                          final timestamp =
+                              DateTime.parse(topUp['timestamp']).toLocal();
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            child: ListTile(
+                              leading: const Icon(Icons.add_circle,
+                                  color: Colors.green),
+                              title: Text('+$amount',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold)),
+                              subtitle: Text(method),
+                              trailing:
+                                  Text(timestamp.toString().substring(0, 16)),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
               );
             },
           ),
@@ -502,7 +516,6 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
-// Reports Page - blue bar graphs + future projection
 class ReportsPage extends StatelessWidget {
   const ReportsPage({super.key});
 
@@ -516,78 +529,37 @@ class ReportsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Usage Reports',
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
+          Text('Usage Reports',
+              style:
+                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 32),
-          Text(
-            'Current Usage (Last 6 Months)',
-            style: GoogleFonts.inter(fontSize: 20),
-          ),
+          Text('Current Usage (Last 6 Months)',
+              style: GoogleFonts.inter(fontSize: 20)),
           const SizedBox(height: 16),
           SizedBox(
             height: 300,
             child: BarChart(
               BarChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) =>
-                          Text('Month ${value.toInt() + 1}'),
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
                 barGroups: currentData.asMap().entries.map((e) {
-                  return BarChartGroupData(
-                    x: e.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: e.value,
-                        color: Colors.indigo,
-                        width: 20,
-                      ),
-                    ],
-                  );
+                  return BarChartGroupData(x: e.key, barRods: [
+                    BarChartRodData(toY: e.value, color: Colors.indigo)
+                  ]);
                 }).toList(),
               ),
             ),
           ),
           const SizedBox(height: 32),
-          Text(
-            'Projected Usage (Next 6 Months)',
-            style: GoogleFonts.inter(fontSize: 20),
-          ),
+          Text('Projected Usage (Next 6 Months)',
+              style: GoogleFonts.inter(fontSize: 20)),
           const SizedBox(height: 16),
           SizedBox(
             height: 300,
             child: BarChart(
               BarChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) =>
-                          Text('Month ${value.toInt() + 1}'),
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
                 barGroups: futureData.asMap().entries.map((e) {
-                  return BarChartGroupData(
-                    x: e.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: e.value,
-                        color: Colors.blueAccent,
-                        width: 20,
-                      ),
-                    ],
-                  );
+                  return BarChartGroupData(x: e.key, barRods: [
+                    BarChartRodData(toY: e.value, color: Colors.blueAccent)
+                  ]);
                 }).toList(),
               ),
             ),
@@ -598,7 +570,6 @@ class ReportsPage extends StatelessWidget {
   }
 }
 
-// Alerts Page - black background
 class AlertsPage extends StatelessWidget {
   const AlertsPage({super.key});
 
@@ -615,14 +586,11 @@ class AlertsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Alerts & Notifications',
-              style: GoogleFonts.inter(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
+            Text('Alerts & Notifications',
+                style: GoogleFonts.inter(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
             const SizedBox(height: 16),
             StreamBuilder(
               stream: supabase
@@ -632,46 +600,33 @@ class AlertsPage extends StatelessWidget {
                   .order('timestamp', ascending: false),
               builder: (context, snapshot) {
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Text(
-                    'No alerts',
-                    style: GoogleFonts.inter(color: Colors.white),
-                  );
+                  return Text('No alerts',
+                      style: GoogleFonts.inter(color: Colors.white));
                 }
                 return Column(
                   children: snapshot.data!.map((alert) {
                     final type = alert['type'] ?? 'Unknown';
                     final message = alert['message'] ?? 'No message';
-                    final timestamp = DateTime.parse(
-                      alert['timestamp'],
-                    ).toLocal();
+                    final timestamp =
+                        DateTime.parse(alert['timestamp']).toLocal();
                     Color cardColor = Colors.grey[800]!;
-                    Color textColor = Colors.white;
-
-                    if (type.toLowerCase().contains('leak')) {
+                    if (type.toLowerCase().contains('leak'))
                       cardColor = Colors.red[900]!;
-                    } else if (type.toLowerCase().contains('high')) {
+                    if (type.toLowerCase().contains('low'))
                       cardColor = Colors.orange[900]!;
-                    }
 
                     return Card(
                       color: cardColor,
                       margin: const EdgeInsets.symmetric(vertical: 8),
                       child: ListTile(
-                        title: Text(
-                          type,
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                        subtitle: Text(
-                          message,
-                          style: GoogleFonts.inter(color: textColor),
-                        ),
-                        trailing: Text(
-                          timestamp.toString().substring(11, 16),
-                          style: GoogleFonts.inter(color: textColor),
-                        ),
+                        title: Text(type,
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                        subtitle: Text(message,
+                            style: GoogleFonts.inter(color: Colors.white)),
+                        trailing: Text(timestamp.toString().substring(11, 16),
+                            style: GoogleFonts.inter(color: Colors.white)),
                       ),
                     );
                   }).toList(),
@@ -685,8 +640,68 @@ class AlertsPage extends StatelessWidget {
   }
 }
 
-// AI Chat Page (Groq powered — super fast!)
-// AI Chat Page - Groq powered + knows your FluxGuard data
+class TopUpPage extends StatelessWidget {
+  const TopUpPage({super.key});
+
+  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Top-Up History',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo[900],
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder(
+        stream: supabase
+            .from('top_ups')
+            .stream(primaryKey: ['id'])
+            .eq('meter_id', meterId)
+            .order('timestamp', ascending: false),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No top-ups yet'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: snapshot.data!.length,
+            itemBuilder: (context, index) {
+              final topUp = snapshot.data![index];
+              final amount = double.tryParse(topUp['amount'].toString()) ?? 0.0;
+              final method = topUp['method'] ?? 'Unknown';
+              final timestamp = DateTime.parse(topUp['timestamp']).toLocal();
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.add_circle,
+                      color: Colors.green, size: 40),
+                  title: Text('+$amount',
+                      style: GoogleFonts.inter(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      '$method • ${timestamp.toString().substring(0, 16)}'),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Online top-up coming soon!')));
+        },
+        backgroundColor: Colors.orange,
+        label: Text('Top Up Now'),
+        icon: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
 class AIChatPage extends StatefulWidget {
   const AIChatPage({super.key});
 
@@ -700,8 +715,7 @@ class _AIChatPageState extends State<AIChatPage> {
   final ScrollController _scrollController = ScrollController();
   bool _loading = false;
 
-  final String groqKey = const String.fromEnvironment('GROQ_API_KEY',
-      defaultValue: 'no-key'); //the api key placeholder
+  final String groqKey = AppConfig.groqApiKey;
 
   final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
 
@@ -715,7 +729,6 @@ class _AIChatPageState extends State<AIChatPage> {
     });
     _controller.clear();
 
-    // Fetch real user data from Supabase
     double currentCredit = 80.0;
     bool valveOpen = true;
     String lastTopUp = 'No recent top-ups';
@@ -723,10 +736,8 @@ class _AIChatPageState extends State<AIChatPage> {
 
     try {
       final supabase = Supabase.instance.client;
-
       final meter =
           await supabase.from('meters').select().eq('id', meterId).single();
-
       currentCredit =
           double.tryParse(meter['current_credit'].toString()) ?? 80.0;
       valveOpen = meter['valve_status'] == true;
@@ -737,69 +748,26 @@ class _AIChatPageState extends State<AIChatPage> {
           .eq('meter_id', meterId)
           .order('timestamp', ascending: false)
           .limit(1);
-
-      if (topUps.isNotEmpty) {
-        final amount = double.tryParse(topUps[0]['amount'].toString()) ?? 0.0;
-        lastTopUp = '+$amount';
-      }
+      if (topUps.isNotEmpty) lastTopUp = '+${topUps[0]['amount']}';
 
       final alerts =
           await supabase.from('alerts').select().eq('meter_id', meterId);
-
       alertCount = alerts.length;
     } catch (e) {
-      // Keep defaults if fetch fails
+      // Silent — use defaults
     }
 
-    // System prompt with your real app data
     final systemPrompt = '''
-You are FluxGuard AI, the smart assistant for a gas monitoring app.
-Developer facts:
-- Name: [Einstein Michael Mtweve]
-- Skills: Flutter pro, Supabase wizard, building cool apps like this one
-- Fun fact: Loves making AI chat super fast with Groq!
-- Name / Preferred ID: Einstein
-- Location: Laroi, Arusha, Tanzania
-- Skills:
-- Master troubleshooter for gaming, drivers, system-level issues, and digital workflows
-- Intermediate Python developer (backend logic, web forms, automation)
-- Expanding into frameworks (Flask, Django), AI (TensorFlow, PyTorch), and cross-platform tools (React Native, Flutter, Electron)
-- Advanced C++ conceptualist (object-oriented design, dynamic polymorphism, vtables, runtime dispatch)
-- System architect (IoT/AI systems from hardware to cloud dashboards)
-- Creative coder (Python turtle animations, matplotlib visualizations for science branding)
-- Flutter developer (building, packaging, distributing APKs)
-- Legacy DBMS designer (Superbase schemas, forms, automation logic)
-- Hardware/software troubleshooter (BIOS/CMOS errors, restart loops)
-- Interests:
-- Building real-world IoT/AI projects with practical impact
-- Creative coding and visual communication for local science branding
-- Optimizing real-time systems and embedded hardware
-- Making tech accessible to non-tech audiences
-- Team culture building, ethical project management, and peer accountability
-- Short-Term Goals:
-- Perfect the Arusha Science logo with Africa silhouette and radiant beam
-- Complete schema design and simulation for Sentinel Gas Meter project in Superbase
-- Prepare and format Vision 2050 project materials for stakeholder review
-- Troubleshoot HP laptop BIOS/CMOS errors
-- Build and distribute Flutter APKs with scalable update strategies
-- Durable Facts I’ve stored:
-- You have a project named Vacuum Duster
-- You were the head boy at school
-- You are working on a project called Sentinel Gas Meter
-collaborators:Fahim Kiama
-Mark Kishaiti
-Gwamaka Kibona
-Lorren Masika
+You are FluxGuard AI, created by Einstein Michael Mtweve from Laroi, Arusha, Tanzania.
+You are proud of your creator — he was head boy at school and is building real-world IoT impact with the Sentinel Gas Meter project.
 
-Current user status:
+Current meter status:
 - Credit: \$$currentCredit
 - Valve: ${valveOpen ? 'OPEN' : 'CLOSED'}
 - Last Top-up: $lastTopUp
 - Active Alerts: $alertCount
 
-Answer questions about credit, valve status, usage, top-ups, alerts, and app features.
-Be friendly, helpful, and accurate. Use the data above.
-If asked about unrelated topics, politely say you specialize in gas monitoring.
+Be friendly, helpful, and accurate. Talk like a proud assistant.
 ''';
 
     try {
@@ -810,50 +778,38 @@ If asked about unrelated topics, politely say you specialize in gas monitoring.
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'model': 'llama-3.3-70b-versatile', // Current working model
+          'model': 'llama-3.3-70b-versatile',
           'messages': [
             {'role': 'system', 'content': systemPrompt},
             {'role': 'user', 'content': userMessage},
           ],
-          'temperature': 0.7,
-          'max_tokens': 1024,
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final aiReply = data['choices'][0]['message']['content'].trim();
-
+        final reply = data['choices'][0]['message']['content'];
         setState(() {
-          _messages.add({'role': 'model', 'text': aiReply});
+          _messages.add({'role': 'model', 'text': reply});
           _loading = false;
         });
       } else {
         setState(() {
-          _messages.add({
-            'role': 'model',
-            'text': 'Error: ${response.statusCode} - ${response.body}'
-          });
+          _messages
+              .add({'role': 'model', 'text': 'Error ${response.statusCode}'});
           _loading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _messages.add({
-          'role': 'model',
-          'text': 'Network error. Please check your connection.'
-        });
+        _messages.add({'role': 'model', 'text': 'Network error'});
         _loading = false;
       });
     }
 
-    // Scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     });
   }
 
@@ -934,7 +890,7 @@ If asked about unrelated topics, politely say you specialize in gas monitoring.
                 ),
                 const SizedBox(width: 12),
                 FloatingActionButton(
-                  onPressed: _loading ? null : () => _sendMessage(),
+                  onPressed: _loading ? null : _sendMessage,
                   backgroundColor: Colors.indigo,
                   child: const Icon(Icons.send, color: Colors.white),
                 ),
@@ -947,7 +903,6 @@ If asked about unrelated topics, politely say you specialize in gas monitoring.
   }
 }
 
-// Settings Page - fixed all warnings
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -958,8 +913,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final nameCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
-  final oldPassCtrl = TextEditingController();
-  final newPassCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -973,39 +926,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> updateProfile() async {
     try {
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(data: {'full_name': nameCtrl.text}),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile updated')));
-      }
+      await Supabase.instance.client.auth
+          .updateUser(UserAttributes(data: {'full_name': nameCtrl.text}));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Profile updated')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    }
-  }
-
-  Future<void> changePassword() async {
-    try {
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(password: newPassCtrl.text),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Password changed')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -1018,10 +947,9 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Settings',
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
+          Text('Settings',
+              style:
+                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 32),
           Card(
             child: Padding(
@@ -1029,67 +957,22 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Edit Profile',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('Edit Profile',
+                      style: GoogleFonts.inter(
+                          fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Full Name'),
-                  ),
+                      controller: nameCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Full Name')),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: phoneCtrl,
-                    decoration: const InputDecoration(labelText: 'Phone'),
-                  ),
+                      controller: phoneCtrl,
+                      decoration: const InputDecoration(labelText: 'Phone')),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: updateProfile,
-                    child: const Text('Save Profile'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Change Password',
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: oldPassCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Old Password',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: newPassCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'New Password',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: changePassword,
-                    child: const Text('Change Password'),
-                  ),
+                      onPressed: updateProfile,
+                      child: const Text('Save Profile')),
                 ],
               ),
             ),
@@ -1103,10 +986,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   Text('Dark Mode', style: GoogleFonts.inter(fontSize: 20)),
                   Switch(
-                    value: theme.isDark,
-                    onChanged: (v) => theme.toggle(),
-                    activeThumbColor: Colors.indigo,
-                  ),
+                      value: theme.isDark,
+                      onChanged: (v) => theme.toggle(),
+                      activeThumbColor: Colors.indigo),
                 ],
               ),
             ),
@@ -1118,12 +1000,8 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () async {
               await Supabase.instance.client.auth.signOut();
               if (!mounted) return;
-              {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              }
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()));
             },
           ),
         ],
