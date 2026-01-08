@@ -1,0 +1,234 @@
+class _AdminDashboardState extends State<AdminDashboard> {
+  final TextEditingController _aiController = TextEditingController();
+  final List<Map<String, String>> _aiMessages = [];
+  final ScrollController _aiScrollController = ScrollController();
+  bool _aiLoading = false;
+
+  final String groqKey = AppConfig.groqApiKey;
+  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+
+  Future<void> _sendAdminAIQuestion() async {
+    final question = _aiController.text.trim();
+    if (question.isEmpty) return;
+
+    setState(() {
+      _aiMessages.add({'role': 'user', 'text': question});
+      _aiLoading = true;
+    });
+    _aiController.clear();
+
+    // Fetch real system data
+    List<Map<String, dynamic>> users = [];
+    List<Map<String, dynamic>> meters = [];
+    List<Map<String, dynamic>> alerts = [];
+    List<Map<String, dynamic>> topUps = [];
+    double totalRevenue = 0.0;
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      users = await supabase.from('meter_users').select('*, auth.users(email)');
+      meters = await supabase.from('meters').select();
+      alerts = await supabase
+          .from('alerts')
+          .select()
+          .order('timestamp', ascending: false)
+          .limit(10);
+      topUps = await supabase.from('top_ups').select();
+
+      for (var topUp in topUps) {
+        totalRevenue += double.tryParse(topUp['amount'].toString()) ?? 0.0;
+      }
+    } catch (e) {
+      // Silent fallback
+    }
+
+    final systemPrompt = '''
+You are FluxGuard Admin AI — an intelligent system analyst for the smart gas monitoring platform.
+
+Current system status:
+- Total registered users: ${users.length}
+- Active meters: ${meters.where((m) => m['valve_status'] == true).length}
+- Total alerts (last 10): ${alerts.length}
+- Total revenue from top-ups: \$$totalRevenue
+
+You can answer questions about:
+- User management (who is admin/technician/customer)
+- Device status and health
+- Consumption patterns
+- Billing and payments
+- Security alerts and anomalies
+- System performance
+
+Be professional, accurate, and provide actionable insights.
+If asked for recommendations, give smart suggestions.
+''';
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $groqKey',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'model': 'llama-3.3-70b-versatile',
+          'messages': [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': question},
+          ],
+          'temperature': 0.7,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final reply = data['choices'][0]['message']['content'];
+        setState(() {
+          _aiMessages.add({'role': 'model', 'text': reply});
+          _aiLoading = false;
+        });
+      } else {
+        setState(() {
+          _aiMessages.add(
+              {'role': 'model', 'text': 'AI Error: ${response.statusCode}'});
+          _aiLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _aiMessages
+            .add({'role': 'model', 'text': 'Network error — check connection'});
+        _aiLoading = false;
+      });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _aiScrollController.animateTo(
+        _aiScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('FluxGuard Admin AI Panel',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.red[900],
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Admin AI Support',
+                      style: GoogleFonts.inter(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  Text('Ask anything about users, meters, billing, alerts...',
+                      style: GoogleFonts.inter(
+                          fontSize: 18, color: Colors.white70)),
+                  const SizedBox(height: 24),
+
+                  // AI Chat
+                  Container(
+                    height: 400,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(26),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: ListView.builder(
+                      controller: _aiScrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _aiMessages.length,
+                      itemBuilder: (context, index) {
+                        final msg = _aiMessages[index];
+                        final isUser = msg['role'] == 'user';
+                        return Align(
+                          alignment: isUser
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            padding: const EdgeInsets.all(16),
+                            constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.7),
+                            decoration: BoxDecoration(
+                              color: isUser
+                                  ? Colors.orange[700]
+                                  : Colors.grey[800],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              msg['text']!,
+                              style: GoogleFonts.inter(
+                                  color: Colors.white, fontSize: 16),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (_aiLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircularProgressIndicator(color: Colors.orange),
+                          SizedBox(width: 12),
+                          Text('AI analyzing system data...',
+                              style: TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          // AI Input
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.black.withAlpha(204),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _aiController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Ask about users, revenue, alerts...',
+                      hintStyle: const TextStyle(color: Colors.white70),
+                      filled: true,
+                      fillColor: Colors.grey[800],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (_) => _sendAdminAIQuestion(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FloatingActionButton(
+                  onPressed: _aiLoading ? null : _sendAdminAIQuestion,
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.smart_toy, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
