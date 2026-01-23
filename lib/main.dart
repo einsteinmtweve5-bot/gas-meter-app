@@ -289,6 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
     AlertsPage(),
     TopUpPage(),
     AIChatPage(),
+    AdminPage(),
     SettingsPage(),
   ];
 
@@ -315,6 +316,8 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Top-Ups'),
           BottomNavigationBarItem(
               icon: Icon(Icons.smart_toy), label: 'AI Chat'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
           BottomNavigationBarItem(
               icon: Icon(Icons.settings), label: 'Settings'),
         ],
@@ -1005,6 +1008,247 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class AdminPage extends StatefulWidget {
+  const AdminPage({super.key});
+
+  @override
+  State<AdminPage> createState() => _AdminPageState();
+}
+
+class _AdminPageState extends State<AdminPage> {
+  final supabase = Supabase.instance.client;
+
+  Future<void> _toggleValve(String meterId, bool currentStatus) async {
+    try {
+      await supabase
+          .from('meters')
+          .update({'valve_status': !currentStatus}).eq('id', meterId);
+      setState(() {}); // Refresh UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Valve ${!currentStatus ? "OPENED" : "CLOSED"} successfully'),
+            backgroundColor: !currentStatus ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating valve: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addTopUp(String meterId, double currentCredit) async {
+    final TextEditingController amountCtrl = TextEditingController();
+    
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Top-Up', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Current Credit: \$${currentCredit.toStringAsFixed(2)}'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Amount (\$)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final amount = double.tryParse(amountCtrl.text);
+              if (amount == null || amount <= 0) return;
+
+              Navigator.pop(context); // Close dialog
+              
+              try {
+                // 1. Record Top-up
+                await supabase.from('top_ups').insert({
+                  'meter_id': meterId,
+                  'amount': amount,
+                  'method': 'Admin Manual',
+                  'timestamp': DateTime.now().toIso8601String(),
+                });
+
+                // 2. Update Meter Credit
+                final newCredit = currentCredit + amount;
+                await supabase
+                    .from('meters')
+                    .update({'current_credit': newCredit})
+                    .eq('id', meterId);
+
+                setState(() {});
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Top-up of \$$amount successful!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error processing top-up: $e')),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Admin Management',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo[900],
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder(
+        stream: supabase.from('meters').stream(primaryKey: ['id']),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No active meters found'));
+          }
+
+          final meters = snapshot.data!;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: meters.length,
+            itemBuilder: (context, index) {
+              final meter = meters[index];
+              final meterId = meter['id'];
+              final valveStatus = meter['valve_status'] == true;
+              final currentCredit = double.tryParse(meter['current_credit'].toString()) ?? 0.0;
+              final lastHeartbeat = meter['last_heartbeat'] ?? 'Unknown';
+
+              return Card(
+                elevation: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Meter ID', 
+                                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600])),
+                              Text(meterId.toString().substring(0, 8) + '...', 
+                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: valveStatus ? Colors.green[100] : Colors.red[100],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              valveStatus ? 'Active' : 'Shutoff',
+                              style: TextStyle(
+                                color: valveStatus ? Colors.green[800] : Colors.red[800],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Credit Balance', style: TextStyle(color: Colors.grey[600])),
+                                Text('\$${currentCredit.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () => _addTopUp(meterId, currentCredit),
+                            icon: const Icon(Icons.add_card, size: 18),
+                            label: const Text('Top Up'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Valve Control'),
+                        subtitle: Text(valveStatus ? 'Valve is currently OPEN' : 'Valve is currently CLOSED',
+                           style: TextStyle(color: valveStatus ? Colors.green : Colors.red)),
+                        value: valveStatus,
+                        activeColor: Colors.green,
+                        inactiveThumbColor: Colors.red,
+                        onChanged: (val) => _toggleValve(meterId, valveStatus),
+                      ),
+                      const Divider(),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('Device Credentials & Details'),
+                        children: [
+                           ListTile(
+                             contentPadding: EdgeInsets.zero,
+                             title: const Text('Full Meter ID'),
+                             subtitle: SelectableText(meterId),
+                           ),
+                           ListTile(
+                             contentPadding: EdgeInsets.zero,
+                             title: const Text('Last Heartbeat'),
+                             subtitle: Text(lastHeartbeat.toString()),
+                           ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
