@@ -33,7 +33,7 @@ dependencies:
   google_fonts: ^6.3.2
   provider: ^6.1.2
   fl_chart: ^1.1.1
-  #flutter_dotenv: ^6.0.0
+  flutter_dotenv: ^6.0.0
   http: ^1.2.2
   syncfusion_flutter_gauges: ^25.1.35+1
   shared_preferences: ^2.3.0
