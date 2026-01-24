@@ -151,10 +151,10 @@ class _LoginPageState extends State<LoginPage> {
                   constraints: const BoxConstraints(maxWidth: 400),
                   padding: const EdgeInsets.all(40),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.35),
+                    color: Colors.black.withAlpha(150),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                        color: Colors.white.withOpacity(0.2), width: 1),
+                        color: Colors.white.withAlpha(100), width: 1),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -183,7 +183,7 @@ class _LoginPageState extends State<LoginPage> {
                           hintText: 'Email Address',
                           hintStyle: const TextStyle(color: Colors.white70),
                           filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
+                          fillColor: Colors.white.withAlpha(25),
                           prefixIcon:
                               const Icon(Icons.email, color: Colors.white70),
                           border: OutlineInputBorder(
@@ -201,7 +201,7 @@ class _LoginPageState extends State<LoginPage> {
                           hintText: 'Password',
                           hintStyle: const TextStyle(color: Colors.white70),
                           filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
+                          fillColor: Colors.white.withAlpha(25),
                           prefixIcon:
                               const Icon(Icons.lock, color: Colors.white70),
                           border: OutlineInputBorder(
@@ -610,10 +610,12 @@ class AlertsPage extends StatelessWidget {
                     final timestamp =
                         DateTime.parse(alert['timestamp']).toLocal();
                     Color cardColor = Colors.grey[800]!;
-                    if (type.toLowerCase().contains('leak'))
+                    if (type.toLowerCase().contains('leak')) {
                       cardColor = Colors.red[900]!;
-                    if (type.toLowerCase().contains('low'))
+                    }
+                    if (type.toLowerCase().contains('low')) {
                       cardColor = Colors.orange[900]!;
+                    }
 
                     return Card(
                       color: cardColor,
@@ -695,7 +697,7 @@ class TopUpPage extends StatelessWidget {
               const SnackBar(content: Text('Online top-up coming soon!')));
         },
         backgroundColor: Colors.orange,
-        label: Text('Top Up Now'),
+        label: const Text('Top Up Now'),
         icon: const Icon(Icons.add),
       ),
     );
@@ -928,13 +930,15 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await Supabase.instance.client.auth
           .updateUser(UserAttributes(data: {'full_name': nameCtrl.text}));
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Profile updated')));
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -1000,6 +1004,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () async {
               await Supabase.instance.client.auth.signOut();
               if (!mounted) return;
+              // ignore: use_build_context_synchronously
               Navigator.pushReplacement(context,
                   MaterialPageRoute(builder: (_) => const LoginPage()));
             },
