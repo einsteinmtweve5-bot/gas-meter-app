@@ -1,0 +1,49 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="neon-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feGaussianBlur stdDeviation="8" result="largeBlur"/>
+      <feMerge>
+        <feMergeNode in="largeBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <linearGradient id="flux-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff00ff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <rect width="400" height="400" fill="#050508" />
+
+  <path d="M200 60 L320 110 V200 C320 280 200 340 200 340 C200 340 80 280 80 200 V110 L200 60" 
+        fill="none" 
+        stroke="#1a1a2e" 
+        stroke-width="12" />
+        
+  <path d="M200 60 L320 110 V200 C320 280 200 340 200 340 C200 340 80 280 80 200 V110 L200 60" 
+        fill="none" 
+        stroke="#00f2ff" 
+        stroke-width="3" 
+        filter="url(#neon-glow)" />
+
+  <path d="M130 150 C 180 150, 120 250, 270 250" 
+        fill="none" 
+        stroke="url(#flux-grad)" 
+        stroke-width="8" 
+        stroke-linecap="round"
+        filter="url(#neon-glow)" />
+        
+  <circle cx="130" cy="150" r="4" fill="#ff00ff" filter="url(#neon-glow)" />
+  <circle cx="270" cy="250" r="4" fill="#00f2ff" filter="url(#neon-glow)" />
+
+  <text x="200" y="380" 
+        text-anchor="middle" 
+        fill="#fff" 
+        style="font-family: 'Verdana', sans-serif; font-weight: bold; font-size: 26px; letter-spacing: 6px;">
+    FLUX<tspan fill="#00f2ff">GUARD</tspan>
+  </text>
+</svg>

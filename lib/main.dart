@@ -28,6 +28,9 @@ void main() async {
     url: 'https://hugqwdfledpcsbupoagc.supabase.co',
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
   );
 
   runApp(
@@ -39,7 +42,7 @@ void main() async {
 }
 
 class AppTheme extends ChangeNotifier {
-  bool isDark = false;
+  bool isDark = true; // Dark theme by default
 
   void toggle() {
     isDark = !isDark;
@@ -69,11 +72,49 @@ class FluxGuardApp extends StatelessWidget {
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.indigo, brightness: Brightness.dark),
-        scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: Colors.grey[900],
+        cardTheme: CardThemeData(
+          color: Colors.grey[850],
+        ),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       ),
-      home: const LoginPage(),
+      home: const AuthWrapper(),
     );
+  }
+}
+
+// AuthWrapper to handle session persistence
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null && mounted) {
+      // Use addPostFrameCallback to navigate after build is complete
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const LoginPage();
   }
 }
 
@@ -235,30 +276,30 @@ class _LoginPageState extends State<LoginPage> {
                         child: const Text('Lost your password?',
                             style: TextStyle(color: Colors.white70)),
                       ),
-                      const SizedBox(height: 32),
-                      const Text('OR',
-                          style:
-                              TextStyle(color: Colors.white70, fontSize: 16)),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton.icon(
-                          onPressed: signUpWithGoogle,
-                          icon: const Icon(Icons.account_circle,
-                              color: Colors.black87),
-                          label: Text(
-                            'Sign in with Google',
-                            style: GoogleFonts.inter(
-                                fontSize: 18, color: Colors.black87),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                      ),
+                      // const SizedBox(height: 32),
+                      // const Text('OR',
+                      //     style:
+                      //         TextStyle(color: Colors.white70, fontSize: 16)),
+                      // const SizedBox(height: 16),
+                      // SizedBox(
+                      //   width: double.infinity,
+                      //   height: 56,
+                      //   child: ElevatedButton.icon(
+                      //     onPressed: signUpWithGoogle,
+                      //     icon: const Icon(Icons.account_circle,
+                      //         color: Colors.black87),
+                      //     label: Text(
+                      //       'Sign in with Google',
+                      //       style: GoogleFonts.inter(
+                      //           fontSize: 18, color: Colors.black87),
+                      //     ),
+                      //     style: ElevatedButton.styleFrom(
+                      //       backgroundColor: Colors.white,
+                      //       shape: RoundedRectangleBorder(
+                      //           borderRadius: BorderRadius.circular(16)),
+                      //     ),
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),
@@ -280,54 +321,139 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  String _userRole = 'user'; // Default to user role
+  bool _isLoadingRole = true;
+  int _adminTabIndex = 0; // For admin tab navigation
 
-  final List<Widget> _pages = const [
-    DashboardPage(),
-    ReportsPage(),
-    AlertsPage(),
-    TopUpPage(),
-    AIChatPage(),
-    AdminPage(),
-    SettingsPage(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserRole();
+  }
+
+  Future<void> _fetchUserRole() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      
+      if (userId != null) {
+        final response = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single();
+        
+        setState(() {
+          _userRole = response['role'] ?? 'user';
+          _isLoadingRole = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _userRole = 'user';
+        _isLoadingRole = false;
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
   }
 
+  void _onAdminTabTapped(int index) {
+    setState(() => _adminTabIndex = index);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingRole) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // If admin, show admin tabs instead of regular user navigation
+    if (_userRole == 'admin') {
+      final List<Widget> adminPages = [
+        const AdminDashboardTab(),
+        const AdminUsersTab(),
+        const AdminMetersTab(),
+        const AdminSettingsTab(),
+      ];
+
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('FluxGuard Admin',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.indigo[900],
+          foregroundColor: Colors.white,
+        ),
+        body: adminPages[_adminTabIndex],
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: Colors.indigo,
+          currentIndex: _adminTabIndex,
+          onTap: _onAdminTabTapped,
+          items: const [
+            BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard), label: 'Dashboard'),
+            BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Users'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.gas_meter), label: 'Meters'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.settings), label: 'Settings'),
+          ],
+        ),
+      );
+    }
+
+    // Regular user navigation
+    final List<Widget> pages = [
+      const DashboardPage(),
+      const ReportsPage(),
+      const AlertsPage(),
+      const TopUpPage(),
+      const AIChatPage(),
+      const SettingsPage(),
+    ];
+
+    final List<BottomNavigationBarItem> navItems = [
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard), label: 'Dashboard'),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.bar_chart), label: 'Reports'),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.notifications), label: 'Alerts'),
+      const BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Top-Ups'),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.smart_toy), label: 'AI Chat'),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.settings), label: 'Settings'),
+    ];
+
     return Scaffold(
-      body: _pages[_selectedIndex],
+      body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.indigo,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard), label: 'Dashboard'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart), label: 'Reports'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.notifications), label: 'Alerts'),
-          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Top-Ups'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.smart_toy), label: 'AI Chat'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.admin_panel_settings), label: 'Admin'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.settings), label: 'Settings'),
-        ],
+        items: navItems,
       ),
     );
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
   final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+  bool? _localValveStatus; // Local override for immediate UI update
 
   Future<void> _cacheData(
       double credit, bool valveOpen, double flowRate) async {
@@ -337,382 +463,771 @@ class DashboardPage extends StatelessWidget {
     await prefs.setDouble('cached_flow', flowRate);
   }
 
+  Future<void> _toggleValve(bool newStatus) async {
+    final supabase = Supabase.instance.client;
+
+    setState(() {
+      _localValveStatus = newStatus;
+    });
+
+    try {
+      await supabase
+          .from('meters')
+          .update({'valve_status': newStatus}).eq('id', meterId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newStatus ? 'Valve Opened Successfully' : 'Valve Closed Successfully',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: newStatus ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _localValveStatus = null;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Dashboard',
-              style:
-                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          StreamBuilder(
-            stream: supabase
-                .from('meters')
-                .stream(primaryKey: ['id']).eq('id', meterId),
-            builder: (context, snapshot) {
-              double credit = 80.0;
-              bool valveOpen = true;
-              double flowRate = 0.0;
-              bool isOffline = false;
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: StreamBuilder(
+        stream: supabase
+            .from('meters')
+            .stream(primaryKey: ['id']).eq('id', meterId),
+        builder: (context, snapshot) {
+          double credit = 80.0;
+          bool valveOpen = true;
+          double flowRate = 0.0;
+          bool isOffline = false;
 
-              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                final meter = snapshot.data![0];
-                credit =
-                    double.tryParse(meter['current_credit'].toString()) ?? 80.0;
-                valveOpen = meter['valve_status'] == true;
-                flowRate =
-                    double.tryParse(meter['current_reading'].toString()) ?? 0.0;
-                _cacheData(credit, valveOpen, flowRate);
-              } else {
-                isOffline = true;
-                SharedPreferences.getInstance().then((prefs) {
-                  credit = prefs.getDouble('cached_credit') ?? 80.0;
-                  valveOpen = prefs.getBool('cached_valve') ?? true;
-                  flowRate = prefs.getDouble('cached_flow') ?? 0.0;
-                });
-              }
+          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            final meter = snapshot.data![0];
+            credit = double.tryParse(meter['current_credit'].toString()) ?? 80.0;
+            valveOpen = _localValveStatus ?? (meter['valve_status'] == true);
+            flowRate = double.tryParse(meter['current_reading'].toString()) ?? 0.0;
+            _cacheData(credit, valveOpen, flowRate);
+          } else {
+            isOffline = true;
+            SharedPreferences.getInstance().then((prefs) {
+              credit = prefs.getDouble('cached_credit') ?? 80.0;
+              valveOpen = prefs.getBool('cached_valve') ?? true;
+              flowRate = prefs.getDouble('cached_flow') ?? 0.0;
+            });
+          }
 
-              return Column(
-                children: [
-                  Card(
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                    color: Colors.indigo[900],
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 120,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    alignment: Alignment.bottomLeft,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Welcome Back,',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                        Text(
+                          'Dashboard',
+                          style: GoogleFonts.outfit(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.indigo[900],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      // Credit Card
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutBack,
+                        builder: (context, value, child) {
+                          return Transform.scale(
+                            scale: value,
+                            child: _buildCreditCard(credit, isOffline, isDark),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Valve Control
+                      Text(
+                        'Valve Control',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
                         children: [
-                          if (isOffline)
-                            Text('Offline Mode',
-                                style: GoogleFonts.inter(
-                                    color: Colors.orange, fontSize: 16)),
-                          Text('Current Credit',
-                              style: GoogleFonts.inter(
-                                  color: Colors.white70, fontSize: 18)),
-                          const SizedBox(height: 8),
-                          Text('\$${credit.toStringAsFixed(2)}',
-                              style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Icon(
-                                  valveOpen ? Icons.check_circle : Icons.cancel,
-                                  color: valveOpen
-                                      ? Colors.greenAccent
-                                      : Colors.redAccent,
-                                  size: 32),
-                              const SizedBox(width: 12),
-                              Text(valveOpen ? 'Valve OPEN' : 'Valve CLOSED',
-                                  style: GoogleFonts.inter(
-                                      color: Colors.white, fontSize: 20)),
-                            ],
+                          Expanded(
+                            child: _buildValveButton(
+                              title: 'OPEN VALVE',
+                              isActive: valveOpen,
+                              isOpening: true,
+                              onTap: () => _toggleValve(true),
+                            ),
                           ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Colors.green, Colors.teal],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.green.withAlpha(100),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        try {
-                                          await supabase
-                                              .from('meters')
-                                              .update({'valve_status': true}).eq(
-                                                  'id', meterId);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content:
-                                                    Text('Opening Valve...'),
-                                                backgroundColor: Colors.green,
-                                                duration: Duration(seconds: 1),
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text('Error: $e'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 16),
-                                        child: Column(
-                                          children: [
-                                            const Icon(Icons.bolt,
-                                                color: Colors.white, size: 28),
-                                            const SizedBox(height: 4),
-                                            Text('TURN ON',
-                                                style: GoogleFonts.inter(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Colors.red, Colors.orange],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.red.withAlpha(100),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        try {
-                                          await supabase
-                                              .from('meters')
-                                              .update({'valve_status': false}).eq(
-                                                  'id', meterId);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content:
-                                                    Text('Closing Valve...'),
-                                                backgroundColor: Colors.red,
-                                                duration: Duration(seconds: 1),
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text('Error: $e'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 16),
-                                        child: Column(
-                                          children: [
-                                            const Icon(Icons.power_settings_new,
-                                                color: Colors.white, size: 28),
-                                            const SizedBox(height: 4),
-                                            Text('TURN OFF',
-                                                style: GoogleFonts.inter(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 32),
-                          Text('Current Gas Flow (FS300A Sensor)',
-                              style: GoogleFonts.inter(
-                                  color: Colors.white, fontSize: 20)),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 250,
-                            child: SfRadialGauge(
-                              axes: <RadialAxis>[
-                                RadialAxis(
-                                  minimum: 0,
-                                  maximum: 6,
-                                  ranges: <GaugeRange>[
-                                    GaugeRange(
-                                        startValue: 0,
-                                        endValue: 2,
-                                        color: Colors.green),
-                                    GaugeRange(
-                                        startValue: 2,
-                                        endValue: 4,
-                                        color: Colors.yellow),
-                                    GaugeRange(
-                                        startValue: 4,
-                                        endValue: 6,
-                                        color: Colors.red),
-                                  ],
-                                  pointers: <GaugePointer>[
-                                    NeedlePointer(value: flowRate),
-                                  ],
-                                  annotations: <GaugeAnnotation>[
-                                    GaugeAnnotation(
-                                      widget: Text(
-                                          '${flowRate.toStringAsFixed(1)} L/min',
-                                          style: GoogleFonts.inter(
-                                              fontSize: 24,
-                                              color: Colors.white)),
-                                      angle: 90,
-                                      positionFactor: 0.8,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildValveButton(
+                              title: 'CLOSE VALVE',
+                              isActive: !valveOpen,
+                              isOpening: false,
+                              onTap: () => _toggleValve(false),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Text('Recent Top-ups',
-                      style: GoogleFonts.inter(
-                          fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  StreamBuilder(
-                    stream: supabase
-                        .from('top_ups')
-                        .stream(primaryKey: ['id'])
-                        .eq('meter_id', meterId)
-                        .order('timestamp', ascending: false)
-                        .limit(5),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Text('No top-ups yet');
-                      }
-                      return Column(
-                        children: snapshot.data!.map((topUp) {
-                          final amount =
-                              double.tryParse(topUp['amount'].toString()) ??
-                                  0.0;
-                          final method = topUp['method'] ?? 'unknown';
-                          final timestamp =
-                              DateTime.parse(topUp['timestamp']).toLocal();
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            child: ListTile(
-                              leading: const Icon(Icons.add_circle,
-                                  color: Colors.green),
-                              title: Text('+$amount',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold)),
-                              subtitle: Text(method),
-                              trailing:
-                                  Text(timestamp.toString().substring(0, 16)),
+                      const SizedBox(height: 32),
+
+                      // Gas Flow Gauge
+                      Text(
+                        'Real-time Flow Rate',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        height: 280,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
                             ),
-                          );
-                        }).toList(),
-                      );
-                    },
+                          ],
+                        ),
+                        child: SfRadialGauge(
+                          axes: <RadialAxis>[
+                            RadialAxis(
+                              minimum: 0,
+                              maximum: 6,
+                              startAngle: 180,
+                              endAngle: 0,
+                              showLabels: false,
+                              showTicks: false,
+                              axisLineStyle: AxisLineStyle(
+                                thickness: 0.2,
+                                thicknessUnit: GaugeSizeUnit.factor,
+                                cornerStyle: CornerStyle.bothCurve,
+                                color: isDark ? Colors.grey[800] : Colors.grey[100],
+                              ),
+                              pointers: <GaugePointer>[
+                                RangePointer(
+                                  value: flowRate,
+                                  width: 0.2,
+                                  sizeUnit: GaugeSizeUnit.factor,
+                                  cornerStyle: CornerStyle.bothCurve,
+                                  gradient: const SweepGradient(
+                                    colors: [Colors.cyan, Colors.purple],
+                                    stops: [0.0, 1.0],
+                                  ),
+                                ),
+                                MarkerPointer(
+                                  value: flowRate,
+                                  markerType: MarkerType.circle,
+                                  color: Colors.white,
+                                  markerHeight: 16,
+                                  markerWidth: 16,
+                                  borderWidth: 4,
+                                  borderColor: Colors.purple,
+                                ),
+                              ],
+                              annotations: <GaugeAnnotation>[
+                                GaugeAnnotation(
+                                  widget: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        flowRate.toStringAsFixed(1),
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 48,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.white : Colors.black,
+                                        ),
+                                      ),
+                                      Text(
+                                        'L/min',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  angle: 90,
+                                  positionFactor: 0.1,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 100), // Bottom padding
+                    ],
                   ),
-                ],
-              );
-            },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCreditCard(double credit, bool isOffline, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF2E3B5E), const Color(0xFF1E2336)]
+              : [Colors.indigo.shade400, Colors.indigo.shade600],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.indigo.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOffline ? Icons.wifi_off : Icons.wifi,
+                      color: isOffline ? Colors.orangeAccent : Colors.greenAccent,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isOffline ? 'Offline' : 'Connected',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.nfc, color: Colors.white.withOpacity(0.5), size: 32),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Available Credit',
+            style: GoogleFonts.inter(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '\$${credit.toStringAsFixed(2)}',
+            style: GoogleFonts.outfit(
+              color: Colors.white,
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildValveButton({
+    required String title,
+    required bool isActive,
+    required bool isOpening,
+    required VoidCallback onTap,
+  }) {
+    final activeColor = isOpening ? Colors.greenAccent : Colors.redAccent;
+    final bgGradient = isOpening
+        ? [const Color(0xFF00C853), const Color(0xFF009624)]
+        : [const Color(0xFFD50000), const Color(0xFFB71C1C)];
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          gradient: isActive
+              ? LinearGradient(colors: bgGradient)
+              : LinearGradient(
+                  colors: [Colors.grey.withOpacity(0.1), Colors.grey.withOpacity(0.05)],
+                ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isActive ? Colors.transparent : Colors.grey.withOpacity(0.2),
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : [],
+        ),
+        child: Column(
+          children: [
+            Icon(
+              isOpening ? Icons.water_drop : Icons.water_drop_outlined,
+              color: isActive ? Colors.white : Colors.grey,
+              size: 32,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                color: isActive ? Colors.white : Colors.grey,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class ReportsPage extends StatelessWidget {
+class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
+
+  @override
+  State<ReportsPage> createState() => _ReportsPageState();
+}
+
+class _ReportsPageState extends State<ReportsPage> {
+  bool _showChart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Delay animation to ensure smooth entry
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) setState(() => _showChart = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final currentData = [50.0, 70.0, 60.0, 80.0, 90.0, 75.0];
     final futureData = currentData.map((e) => e * 1.1).toList();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Usage Reports',
-              style:
-                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 32),
-          Text('Current Usage (Last 6 Months)',
-              style: GoogleFonts.inter(fontSize: 20)),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 300,
-            child: BarChart(
-              BarChartData(
-                barGroups: currentData.asMap().entries.map((e) {
-                  return BarChartGroupData(x: e.key, barRods: [
-                    BarChartRodData(toY: e.value, color: Colors.indigo)
-                  ]);
-                }).toList(),
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 48), // Padding for top status bar area
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Usage Insights',
+                      style: GoogleFonts.outfit(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.indigo[900])),
+                  Text('Track your gas consumption over time',
+                      style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-          Text('Projected Usage (Next 6 Months)',
-              style: GoogleFonts.inter(fontSize: 20)),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 300,
-            child: BarChart(
-              BarChartData(
-                barGroups: futureData.asMap().entries.map((e) {
-                  return BarChartGroupData(x: e.key, barRods: [
-                    BarChartRodData(toY: e.value, color: Colors.blueAccent)
-                  ]);
-                }).toList(),
+            const SizedBox(height: 32),
+            
+            // Current Usage Chart (Line Chart)
+            _buildChartSection(
+              title: 'Current Usage Trend',
+              subtitle: 'Last 6 Months',
+              isDark: isDark,
+              delay: 200,
+              child: SizedBox(
+                height: 300,
+                child: _showChart
+                    ? LineChart(
+                        LineChartData(
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            horizontalInterval: 20,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : Colors.indigo.withOpacity(0.05),
+                                strokeWidth: 1,
+                              );
+                            },
+                          ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 30,
+                                interval: 1,
+                                getTitlesWidget: (value, meta) {
+                                  const titles = [
+                                    'Jan',
+                                    'Feb',
+                                    'Mar',
+                                    'Apr',
+                                    'May',
+                                    'Jun'
+                                  ];
+                                  if (value.toInt() >= 0 &&
+                                      value.toInt() < titles.length) {
+                                    return SideTitleWidget(
+                                      meta: meta,
+                                      child: Text(
+                                        titles[value.toInt()],
+                                        style: GoogleFonts.inter(
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox();
+                                },
+                              ),
+                            ),
+                            leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          minX: 0,
+                          maxX: 5,
+                          minY: 0,
+                          maxY: 100,
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: currentData
+                                  .asMap()
+                                  .entries
+                                  .map((e) => FlSpot(
+                                      e.key.toDouble(), e.value))
+                                  .toList(),
+                              isCurved: true,
+                              gradient: const LinearGradient(
+                                colors: [Colors.cyanAccent, Colors.blueAccent],
+                              ),
+                              barWidth: 4,
+                              isStrokeCapRound: true,
+                              dotData: FlDotData(
+                                show: true,
+                                getDotPainter: (spot, percent, barData, index) {
+                                  return FlDotCirclePainter(
+                                    radius: 4,
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                    strokeColor: Colors.blueAccent,
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blueAccent.withOpacity(0.3),
+                                    Colors.blueAccent.withOpacity(0.0),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeInOut,
+                      )
+                    : Container(),
               ),
             ),
-          ),
-        ],
+            
+            const SizedBox(height: 32),
+            
+            // Projected Usage Chart (Bar Chart)
+            _buildChartSection(
+              title: 'Projected Usage',
+              subtitle: 'Next 6 Months Forecast',
+              isDark: isDark,
+              delay: 400,
+              child: SizedBox(
+                height: 300,
+                child: _showChart
+                    ? BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: 120,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (_) => Colors.indigo.withOpacity(0.8),
+                              tooltipBorderRadius: BorderRadius.circular(8),
+                              tooltipPadding: const EdgeInsets.all(8),
+                              tooltipMargin: 8,
+                              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                return BarTooltipItem(
+                                  '${rod.toY.round()} Units',
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  const titles = [
+                                    'Jul',
+                                    'Aug',
+                                    'Sep',
+                                    'Oct',
+                                    'Nov',
+                                    'Dec'
+                                  ];
+                                  if (value.toInt() >= 0 &&
+                                      value.toInt() < titles.length) {
+                                    return SideTitleWidget(
+                                      meta: meta,
+                                      child: Text(
+                                        titles[value.toInt()],
+                                        style: GoogleFonts.inter(
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox();
+                                },
+                              ),
+                            ),
+                            leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            horizontalInterval: 20,
+                            getDrawingHorizontalLine: (value) => FlLine(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.indigo.withOpacity(0.05),
+                              strokeWidth: 1,
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          barGroups: futureData.asMap().entries.map((e) {
+                            return BarChartGroupData(
+                              x: e.key,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: e.value,
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Colors.indigoAccent,
+                                      Colors.purpleAccent
+                                    ],
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                  ),
+                                  width: 16,
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(6)),
+                                  backDrawRodData: BackgroundBarChartRodData(
+                                    show: true,
+                                    toY: 120,
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.05)
+                                        : Colors.grey.withOpacity(0.1),
+                                  ),
+                                )
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                        swapAnimationDuration:
+                            const Duration(milliseconds: 800),
+                        swapAnimationCurve: Curves.easeInOut,
+                      )
+                    : Container(),
+              ),
+            ),
+             const SizedBox(height: 100), // Bottom padding
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildChartSection(
+      {required String title,
+      required String subtitle,
+      required bool isDark,
+      required int delay,
+      required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 600 + delay),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.translate(
+          offset: Offset(0, 30 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E2336).withOpacity(0.6)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.transparent,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Text(title,
+                      style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.indigo[900])),
+                  Text(subtitle,
+                      style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  const SizedBox(height: 24),
+                  child,
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -725,67 +1240,212 @@ class AlertsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 120,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                alignment: Alignment.bottomLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: GoogleFonts.outfit(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.indigo[900],
+                      ),
+                    ),
+                    Text(
+                      'Stay updated with your system status',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          StreamBuilder(
+            stream: supabase
+                .from('alerts')
+                .stream(primaryKey: ['id'])
+                .eq('meter_id', meterId)
+                .order('timestamp', ascending: false),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.notifications_off_outlined,
+                            size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text('No alerts yet',
+                            style: GoogleFonts.inter(
+                                color: Colors.grey[400], fontSize: 18)),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final alerts = snapshot.data!;
+              return SliverPadding(
+                padding: const EdgeInsets.all(24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final alert = alerts[index];
+                      final type = alert['type'] ?? 'Unknown';
+                      final message = alert['message'] ?? 'No message';
+                      final timestamp =
+                          DateTime.parse(alert['timestamp']).toLocal();
+
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 400 + (index * 100)),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) {
+                          return Transform.translate(
+                            offset: Offset(0, 50 * (1 - value)),
+                            child: Opacity(
+                              opacity: value,
+                              child: _buildAlertCard(
+                                  type, message, timestamp, isDark),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    childCount: alerts.length,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertCard(
+      String type, String message, DateTime timestamp, bool isDark) {
+    Color baseColor = Colors.blue;
+    IconData icon = Icons.info_outline;
+
+    if (type.toLowerCase().contains('leak')) {
+      baseColor = Colors.red;
+      icon = Icons.warning_amber_rounded;
+    } else if (type.toLowerCase().contains('low')) {
+      baseColor = Colors.orange;
+      icon = Icons.battery_alert_rounded;
+    }
 
     return Container(
-      color: Colors.black,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Alerts & Notifications',
-                style: GoogleFonts.inter(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-            const SizedBox(height: 16),
-            StreamBuilder(
-              stream: supabase
-                  .from('alerts')
-                  .stream(primaryKey: ['id'])
-                  .eq('meter_id', meterId)
-                  .order('timestamp', ascending: false),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Text('No alerts',
-                      style: GoogleFonts.inter(color: Colors.white));
-                }
-                return Column(
-                  children: snapshot.data!.map((alert) {
-                    final type = alert['type'] ?? 'Unknown';
-                    final message = alert['message'] ?? 'No message';
-                    final timestamp =
-                        DateTime.parse(alert['timestamp']).toLocal();
-                    Color cardColor = Colors.grey[800]!;
-                    if (type.toLowerCase().contains('leak')) {
-                      cardColor = Colors.red[900]!;
-                    }
-                    if (type.toLowerCase().contains('low')) {
-                      cardColor = Colors.orange[900]!;
-                    }
-
-                    return Card(
-                      color: cardColor,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        title: Text(type,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2336) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: baseColor.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border(
+          left: BorderSide(color: baseColor, width: 4),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {},
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: baseColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: baseColor, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            type,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            _formatTime(timestamp),
                             style: GoogleFonts.inter(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white)),
-                        subtitle: Text(message,
-                            style: GoogleFonts.inter(color: Colors.white)),
-                        trailing: Text(timestamp.toString().substring(11, 16),
-                            style: GoogleFonts.inter(color: Colors.white)),
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[500] : Colors.grey[400],
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  }).toList(),
-                );
-              },
+                      const SizedBox(height: 8),
+                      Text(
+                        message,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[300] : Colors.grey[600],
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else {
+      return '${time.day}/${time.month}';
+    }
   }
 }
 
@@ -797,55 +1457,217 @@ class TopUpPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Top-Up History',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.indigo[900],
-        foregroundColor: Colors.white,
-      ),
-      body: StreamBuilder(
-        stream: supabase
-            .from('top_ups')
-            .stream(primaryKey: ['id'])
-            .eq('meter_id', meterId)
-            .order('timestamp', ascending: false),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No top-ups yet'));
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: snapshot.data!.length,
-            itemBuilder: (context, index) {
-              final topUp = snapshot.data![index];
-              final amount = double.tryParse(topUp['amount'].toString()) ?? 0.0;
-              final method = topUp['method'] ?? 'Unknown';
-              final timestamp = DateTime.parse(topUp['timestamp']).toLocal();
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.add_circle,
-                      color: Colors.green, size: 40),
-                  title: Text('+$amount',
-                      style: GoogleFonts.inter(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                      '$method • ${timestamp.toString().substring(0, 16)}'),
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 200,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [Colors.orange.shade900, const Color(0xFF101018)]
+                        : [Colors.orange.shade400, Colors.white],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.account_balance_wallet,
+                          color: Colors.white, size: 32),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Payment History',
+                      style: GoogleFonts.outfit(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          StreamBuilder(
+            stream: supabase
+                .from('top_ups')
+                .stream(primaryKey: ['id'])
+                .eq('meter_id', meterId)
+                .order('timestamp', ascending: false),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.receipt_long_outlined,
+                            size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text('No transactions yet',
+                            style: GoogleFonts.inter(
+                                color: Colors.grey[400], fontSize: 18)),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              final topUps = snapshot.data!;
+              return SliverPadding(
+                padding: const EdgeInsets.all(24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final topUp = topUps[index];
+                      final amount =
+                          double.tryParse(topUp['amount'].toString()) ?? 0.0;
+                      final method = topUp['method'] ?? 'Unknown';
+                      final timestamp =
+                          DateTime.parse(topUp['timestamp']).toLocal();
+
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 300 + (index * 50)),
+                        curve: Curves.easeOutBack,
+                        builder: (context, value, child) {
+                          return Transform.scale(
+                            scale: value,
+                            child: _buildTransactionTile(
+                                amount, method, timestamp, isDark),
+                          );
+                        },
+                      );
+                    },
+                    childCount: topUps.length,
+                  ),
                 ),
               );
             },
-          );
-        },
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Online top-up coming soon!')));
-        },
-        backgroundColor: Colors.orange,
-        label: const Text('Top Up Now'),
-        icon: const Icon(Icons.add),
+      floatingActionButton: ScaleTransition(
+        scale: const AlwaysStoppedAnimation(1), // Can animate if converted to Stateful
+        child: FloatingActionButton.extended(
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Online top-up coming soon!'),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          },
+          backgroundColor: Colors.orange,
+          label: Text(
+            'Add Credit',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          icon: const Icon(Icons.add),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionTile(
+      double amount, String method, DateTime timestamp, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2336) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Receipt zigzag detail (optional visual flair)
+          Positioned(
+            left: 0,
+            top: 20,
+            bottom: 20,
+            width: 4,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.greenAccent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.payments_outlined,
+                      color: Colors.green, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        method,
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        '${timestamp.day}/${timestamp.month}/${timestamp.year} • ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[500] : Colors.grey[400],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '+\$${amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Colors.greenAccent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -865,7 +1687,6 @@ class _AIChatPageState extends State<AIChatPage> {
   bool _loading = false;
 
   final String groqKey = AppConfig.groqApiKey;
-
   final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
 
   Future<void> _sendMessage() async {
@@ -965,89 +1786,170 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       appBar: AppBar(
-        title: Text('AI Assistant',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.indigo[900],
-        foregroundColor: Colors.white,
+        title: Text('FluxGuard AI',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        foregroundColor: isDark ? Colors.white : Colors.indigo[900],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {}, // Handled by Tab logic usually, but here for UI
+        ),
       ),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final isUser = msg['role'] == 'user';
-                return Align(
-                  alignment:
-                      isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    padding: const EdgeInsets.all(16),
-                    constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.8),
-                    decoration: BoxDecoration(
-                      color:
-                          isUser ? Colors.indigo : Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      msg['text']!,
-                      style: GoogleFonts.inter(
-                        color: isUser ? Colors.white : null,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                );
+                return _buildMessageBubble(msg['text']!, isUser, isDark);
               },
             ),
           ),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(16),
+            Padding(
+              padding: const EdgeInsets.only(left: 20, bottom: 20),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  CircularProgressIndicator(color: Colors.indigo),
-                  SizedBox(width: 12),
-                  Text('AI is thinking...'),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.indigo,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI is thinking...',
+                    style: GoogleFonts.inter(
+                        color: Colors.grey, fontStyle: FontStyle.italic),
+                  ),
                 ],
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: 'Ask about your gas usage...',
-                      filled: true,
-                      fillColor: Theme.of(context).cardColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FloatingActionButton(
-                  onPressed: _loading ? null : _sendMessage,
-                  backgroundColor: Colors.indigo,
-                  child: const Icon(Icons.send, color: Colors.white),
-                ),
-              ],
+          _buildInputArea(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(String text, bool isUser, bool isDark) {
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(16),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          gradient: isUser
+              ? const LinearGradient(
+                  colors: [Colors.indigo, Colors.blueAccent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isUser
+              ? null
+              : (isDark ? const Color(0xFF1E2336) : Colors.white),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isUser ? 20 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 20),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
+          ],
+        ),
+        child: Text(
+          text,
+          style: GoogleFonts.inter(
+            color: isUser
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black87),
+            fontSize: 15,
+            height: 1.4,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputArea(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E2336) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.black26 : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.transparent,
+                  ),
+                ),
+                child: TextField(
+                  controller: _controller,
+                  style: GoogleFonts.inter(
+                      color: isDark ? Colors.white : Colors.black87),
+                  decoration: InputDecoration(
+                    hintText: 'Ask FluxGuard Assistant...',
+                    hintStyle:
+                        GoogleFonts.inter(color: Colors.grey, fontSize: 14),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: _loading ? null : _sendMessage,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Colors.indigo, Colors.blueAccent],
+                  ),
+                ),
+                child: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1061,31 +1963,79 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final supabase = Supabase.instance.client;
   final nameCtrl = TextEditingController();
-  final phoneCtrl = TextEditingController();
+  String userEmail = '';
+  String userName = '';
+  String? meterId;
+  bool notificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
-    final user = Supabase.instance.client.auth.currentUser;
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = supabase.auth.currentUser;
     if (user != null) {
-      nameCtrl.text = user.userMetadata?['full_name'] ?? '';
-      phoneCtrl.text = user.phone ?? '';
+      try {
+        final profile = await supabase
+            .from('profiles')
+            .select('full_name, email, meter_id')
+            .eq('id', user.id)
+            .single();
+
+        if (mounted) {
+          setState(() {
+            userName = profile['full_name'] ?? 'User';
+            userEmail = profile['email'] ?? user.email ?? '';
+            meterId = profile['meter_id'];
+            nameCtrl.text = userName;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            userEmail = user.email ?? '';
+            userName = user.userMetadata?['full_name'] ?? 'User';
+            nameCtrl.text = userName;
+          });
+        }
+      }
     }
   }
 
-  Future<void> updateProfile() async {
+  Future<void> _updateProfile() async {
+    if (nameCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name cannot be empty')),
+      );
+      return;
+    }
+
     try {
-      await Supabase.instance.client.auth
-          .updateUser(UserAttributes(data: {'full_name': nameCtrl.text}));
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Profile updated')));
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        await supabase
+            .from('profiles')
+            .update({'full_name': nameCtrl.text}).eq('id', userId);
+
+        if (mounted) {
+          setState(() => userName = nameCtrl.text);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -1093,69 +2043,518 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<AppTheme>(context);
+    final isDark = theme.isDark;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Settings',
-              style:
-                  GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 32),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 280,
+            floating: false,
+            pinned: true,
+            stretch: true,
+            backgroundColor: isDark ? const Color(0xFF101018) : Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              stretchModes: const [
+                StretchMode.zoomBackground,
+                StretchMode.blurBackground,
+              ],
+              background: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Text('Edit Profile',
-                      style: GoogleFonts.inter(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  TextField(
-                      controller: nameCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'Full Name')),
-                  const SizedBox(height: 16),
-                  TextField(
-                      controller: phoneCtrl,
-                      decoration: const InputDecoration(labelText: 'Phone')),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                      onPressed: updateProfile,
-                      child: const Text('Save Profile')),
+                  // Dynamic Background Gradient
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isDark
+                            ? [
+                                Colors.indigo.shade900,
+                                const Color(0xFF1A1F38),
+                                Colors.black
+                              ]
+                            : [
+                                Colors.indigo.shade400,
+                                Colors.indigo.shade100,
+                                Colors.white
+                              ],
+                      ),
+                    ),
+                  ),
+                  // Decorative Circles
+                  Positioned(
+                    top: -50,
+                    right: -50,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.05),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -30,
+                    left: -30,
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.indigoAccent.withOpacity(0.1),
+                      ),
+                    ),
+                  ),
+                  // Profile Content
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 60),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 800),
+                          curve: Curves.elasticOut,
+                          builder: (context, value, child) {
+                            return Transform.scale(
+                              scale: value,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Colors.cyanAccent,
+                                      Colors.indigoAccent
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.cyanAccent.withOpacity(0.4),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: CircleAvatar(
+                                  radius: 60,
+                                  backgroundColor: isDark
+                                      ? Colors.grey[900]
+                                      : Colors.white,
+                                  child: Text(
+                                    userName.isNotEmpty
+                                        ? userName[0].toUpperCase()
+                                        : 'U',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 48,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.indigo[900],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          userName,
+                          style: GoogleFonts.outfit(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            userEmail,
+                            style: GoogleFonts.inter(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Dark Mode', style: GoogleFonts.inter(fontSize: 20)),
-                  Switch(
-                      value: theme.isDark,
-                      onChanged: (v) => theme.toggle(),
-                      activeThumbColor: Colors.indigo),
+
+          // Scrollable Settings List
+          SliverPadding(
+            padding: const EdgeInsets.all(20),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate(
+                [
+                  _buildSectionHeader('Profile Settings', delay: 100),
+                  _buildSettingsCard(
+                    delay: 200,
+                    children: [
+                      _buildTile(
+                        icon: Icons.person_outline,
+                        color: Colors.blueAccent,
+                        title: 'Full Name',
+                        subtitle: userName,
+                        onTap: _showEditNameDialog,
+                        trailing: Icon(Icons.edit,
+                            size: 18, color: Colors.grey[400]),
+                      ),
+                      _buildDivider(),
+                      _buildTile(
+                        icon: Icons.gas_meter_outlined,
+                        color: Colors.orangeAccent,
+                        title: 'Meter ID',
+                        subtitle: meterId != null
+                            ? '${meterId!.substring(0, 8)}...'
+                            : 'Not assigned',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader('Preferences', delay: 300),
+                  _buildSettingsCard(
+                    delay: 400,
+                    children: [
+                      _buildSwitchTile(
+                        icon: theme.isDark
+                            ? Icons.dark_mode_outlined
+                            : Icons.light_mode_outlined,
+                        color: Colors.purpleAccent,
+                        title: 'Dark Mode',
+                        value: theme.isDark,
+                        onChanged: (v) => theme.toggle(),
+                      ),
+                      _buildDivider(),
+                      _buildSwitchTile(
+                        icon: Icons.notifications_none_outlined,
+                        color: Colors.pinkAccent,
+                        title: 'Notifications',
+                        value: notificationsEnabled,
+                        onChanged: (v) =>
+                            setState(() => notificationsEnabled = v),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader('Support & About', delay: 500),
+                  _buildSettingsCard(
+                    delay: 600,
+                    children: [
+                      _buildTile(
+                        icon: Icons.info_outline,
+                        color: Colors.tealAccent,
+                        title: 'App Version',
+                        subtitle: 'v1.0.0 (Beta)',
+                      ),
+                      _buildDivider(),
+                      _buildTile(
+                        icon: Icons.code,
+                        color: Colors.greenAccent,
+                        title: 'Developer',
+                        subtitle: 'Einstein Michael Mtweve',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutBack,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red.withOpacity(0.1),
+                                  Colors.red.withOpacity(0.05)
+                                ],
+                              ),
+                              border: Border.all(
+                                  color: Colors.red.withOpacity(0.2)),
+                            ),
+                            child: ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.logout,
+                                    color: Colors.redAccent),
+                              ),
+                              title: Text(
+                                'Sign Out',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.redAccent,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              onTap: _showLogoutDialog,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 50),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: Text('Log Out', style: GoogleFonts.inter(color: Colors.red)),
-            onTap: () async {
-              await Supabase.instance.client.auth.signOut();
-              if (!mounted) return;
-              // ignore: use_build_context_synchronously
-              Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()));
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, {required int delay}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 500 + delay),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 8),
+            child: Text(
+              title,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).hintColor,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSettingsCard(
+      {required List<Widget> children, required int delay}) {
+    final isDark = Provider.of<AppTheme>(context).isDark;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 600 + delay),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 30 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E2336).withOpacity(0.8)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.transparent,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Column(
+                    children: children,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    String? subtitle,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    final isDark = Provider.of<AppTheme>(context).isDark;
+    return ListTile(
+      onTap: onTap,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color, size: 22),
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black87,
+          fontSize: 16,
+        ),
+      ),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle,
+              style: GoogleFonts.inter(
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                fontSize: 14,
+              ),
+            )
+          : null,
+      trailing: trailing,
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required bool value,
+    required Function(bool) onChanged,
+  }) {
+    final isDark = Provider.of<AppTheme>(context).isDark;
+    return SwitchListTile(
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      secondary: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color, size: 22),
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black87,
+          fontSize: 16,
+        ),
+      ),
+      value: value,
+      activeColor: color,
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(
+      height: 1,
+      color: Colors.grey.withOpacity(0.1),
+      indent: 20,
+      endIndent: 20,
+    );
+  }
+
+  void _showEditNameDialog() {
+    // ... same logic ...
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor:
+            Provider.of<AppTheme>(context).isDark ? const Color(0xFF1E2336) : Colors.white,
+        title: Text('Edit Name',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: InputDecoration(
+            labelText: 'Full Name',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            prefixIcon: const Icon(Icons.person),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _updateProfile();
+              Navigator.pop(context);
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog() {
+       showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor:
+            Provider.of<AppTheme>(context).isDark ? const Color(0xFF1E2336) : Colors.white,
+        title: Text('Sign Out',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+             onPressed: () async {
+              await supabase.auth.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1170,40 +2569,700 @@ class AdminPage extends StatefulWidget {
   State<AdminPage> createState() => _AdminPageState();
 }
 
-class _AdminPageState extends State<AdminPage> {
+class _AdminPageState extends State<AdminPage>
+    with SingleTickerProviderStateMixin {
   final supabase = Supabase.instance.client;
+  String _userRole = 'user';
+  bool _isCheckingRole = true;
+  late TabController _tabController;
 
-  Future<void> _toggleValve(String meterId, bool currentStatus) async {
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _checkAdminRole();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkAdminRole() async {
     try {
-      await supabase
-          .from('meters')
-          .update({'valve_status': !currentStatus}).eq('id', meterId);
-      setState(() {}); // Refresh UI
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Valve ${!currentStatus ? "OPENED" : "CLOSED"} successfully'),
-            backgroundColor: !currentStatus ? Colors.green : Colors.red,
-          ),
-        );
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final response = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        if (mounted) {
+          setState(() {
+            _userRole = response['role'] ?? 'user';
+            _isCheckingRole = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isCheckingRole = false);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating valve: $e')),
-        );
-      }
+      if (mounted) setState(() => _isCheckingRole = false);
     }
   }
 
-  Future<void> _addTopUp(String meterId, double currentCredit) async {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Show loading while checking role
+    if (_isCheckingRole) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: const Center(
+            child: CircularProgressIndicator(color: Colors.indigo)),
+      );
+    }
+
+    // If not admin, show access denied
+    if (_userRole != 'admin') {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: const BackButton(color: Colors.red),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.lock_rounded, size: 64, color: Colors.red[400]),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Access Denied',
+                style: GoogleFonts.outfit(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You do not have admin privileges',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Admin access granted - show tabbed admin panel
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              expandedHeight: 180,
+              pinned: true,
+              backgroundColor: isDark ? const Color(0xFF101018) : Colors.white,
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [Colors.indigo.shade900, const Color(0xFF101018)]
+                          : [Colors.indigo.shade300, Colors.white],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child:
+                                    const Icon(Icons.admin_panel_settings, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Admin Console',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              bottom: TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.cyanAccent,
+                indicatorWeight: 3,
+                labelColor: isDark ? Colors.white : Colors.indigo[900],
+                unselectedLabelColor: isDark ? Colors.white54 : Colors.grey[600],
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                tabs: const [
+                  Tab(text: 'Overview'),
+                  Tab(text: 'Users'),
+                  Tab(text: 'Meters'),
+                  Tab(text: 'Settings'),
+                ],
+              ),
+            ),
+          ];
+        },
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            const AdminDashboardTab(),
+            const AdminUsersTab(),
+            const AdminMetersTab(),
+            const AdminSettingsTab(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Dashboard Tab
+class AdminDashboardTab extends StatelessWidget {
+  const AdminDashboardTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StreamBuilder(
+            stream: supabase.from('profiles').stream(primaryKey: ['id']),
+            builder: (context, profileSnapshot) {
+              return StreamBuilder(
+                stream: supabase.from('meters').stream(primaryKey: ['id']),
+                builder: (context, meterSnapshot) {
+                  int totalUsers = 0;
+                  int totalMeters = 0;
+                  double totalCredits = 0.0;
+                  double totalUsage = 0.0;
+                  int activeMeters = 0;
+
+                  if (profileSnapshot.hasData) {
+                    totalUsers = profileSnapshot.data!.length;
+                  }
+
+                  if (meterSnapshot.hasData && meterSnapshot.data!.isNotEmpty) {
+                    totalMeters = meterSnapshot.data!.length;
+                    for (var meter in meterSnapshot.data!) {
+                      totalCredits += double.tryParse(
+                              meter['current_credit']?.toString() ?? '0') ??
+                          0.0;
+                      totalUsage += double.tryParse(
+                              meter['current_reading']?.toString() ?? '0') ??
+                          0.0;
+                      if (meter['valve_status'] == true) activeMeters++;
+                    }
+                  }
+
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              'Total Users',
+                              totalUsers.toString(),
+                              Icons.people_outline,
+                              Colors.blueAccent,
+                              isDark,
+                              0,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatCard(
+                              'Total Meters',
+                              totalMeters.toString(),
+                              Icons.gas_meter_outlined,
+                              Colors.purpleAccent,
+                              isDark,
+                              100,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              'Active',
+                              activeMeters.toString(),
+                              Icons.check_circle_outline,
+                              Colors.greenAccent,
+                              isDark,
+                              200,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatCard(
+                              'Credits',
+                              '\$${totalCredits.toStringAsFixed(0)}',
+                              Icons.account_balance_wallet_outlined,
+                              Colors.orangeAccent,
+                              isDark,
+                              300,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildStatCard(
+                        'Total Gas Consumed',
+                        '${totalUsage.toStringAsFixed(2)} m³',
+                        Icons.analytics_outlined,
+                        Colors.indigoAccent,
+                        isDark,
+                        400,
+                        fullWidth: true,
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Recent Top-up Activity',
+            style: GoogleFonts.outfit(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.indigo[900]),
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder(
+            stream: supabase
+                .from('top_ups')
+                .stream(primaryKey: ['id'])
+                .order('timestamp', ascending: false)
+                .limit(10),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Text('No recent activity',
+                        style: GoogleFonts.inter(color: Colors.grey)),
+                  ),
+                );
+              }
+              return Column(
+                children: snapshot.data!.map((topUp) {
+                  final amount =
+                      double.tryParse(topUp['amount']?.toString() ?? '0') ?? 0.0;
+                  final timestamp =
+                      DateTime.parse(topUp['timestamp']).toLocal();
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 8),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add_circle_outline,
+                            color: Colors.green, size: 24),
+                      ),
+                      title: Text(
+                        '+\$${amount.toStringAsFixed(2)}',
+                        style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: isDark ? Colors.white : Colors.black87),
+                      ),
+                      subtitle: Text(
+                        topUp['method'] ?? 'Unknown method',
+                        style: GoogleFonts.inter(fontSize: 12),
+                      ),
+                      trailing: Text(
+                        '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}\n${timestamp.day}/${timestamp.month}',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+    bool isDark,
+    int delay, {
+    bool fullWidth = false,
+  }) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 600 + delay),
+      curve: Curves.easeOutBack,
+      builder: (context, animValue, child) {
+        return Transform.scale(
+          scale: animValue,
+          child: Container(
+            width: fullWidth ? double.infinity : null,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2336) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment:
+                  fullWidth ? CrossAxisAlignment.start : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, size: 28, color: color),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Users Tab
+class AdminUsersTab extends StatelessWidget {
+  const AdminUsersTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: StreamBuilder(
+        stream: supabase.from('profiles').stream(primaryKey: ['id']),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.people_outline, size: 60, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text('No users found',
+                      style: GoogleFonts.inter(color: Colors.grey[500])),
+                ],
+              ),
+            );
+          }
+
+          final users = snapshot.data!;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            physics: const BouncingScrollPhysics(),
+            itemCount: users.length,
+            itemBuilder: (context, index) {
+              final user = users[index];
+              final userId = user['id'];
+              final email = user['email'] ?? 'No email';
+              final fullName = user['full_name'] ?? 'No name';
+              final meterId = user['meter_id'];
+
+              return TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: Duration(milliseconds: 300 + (index * 50)),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  return Transform.translate(
+                    offset: Offset(0, 30 * (1 - value)),
+                    child: Opacity(
+                      opacity: value,
+                      child: FutureBuilder(
+                        future: meterId != null
+                            ? supabase
+                                .from('meters')
+                                .select('current_credit')
+                                .eq('id', meterId)
+                                .single()
+                            : null,
+                        builder: (context, meterSnapshot) {
+                          double credit = 0.0;
+                          if (meterSnapshot.hasData) {
+                            credit = double.tryParse(meterSnapshot
+                                        .data!['current_credit']
+                                        ?.toString() ??
+                                    '0') ??
+                                0.0;
+                          }
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2336)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => UserDetailPage(
+                                          userId: userId, meterId: meterId),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Colors.indigo,
+                                              Colors.blueAccent
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color:
+                                                  Colors.indigo.withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          fullName.isNotEmpty
+                                              ? fullName[0].toUpperCase()
+                                              : 'U',
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 20,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              fullName,
+                                              style: GoogleFonts.outfit(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : Colors.black87,
+                                              ),
+                                            ),
+                                            Text(
+                                              email,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.account_balance_wallet,
+                                                  size: 14,
+                                                  color: Colors.greenAccent,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '\$${credit.toStringAsFixed(2)}',
+                                                  style: GoogleFonts.inter(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                    color: Colors.greenAccent,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(Icons.chevron_right_rounded,
+                                          color: Colors.grey[400]),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RegisterUserPage()),
+          );
+        },
+        backgroundColor: Colors.indigoAccent,
+        elevation: 4,
+        icon: const Icon(Icons.person_add_rounded),
+        label: Text('Add User', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+// User Detail Page
+class UserDetailPage extends StatefulWidget {
+  final String userId;
+  final String? meterId;
+
+  const UserDetailPage({super.key, required this.userId, this.meterId});
+
+  @override
+  State<UserDetailPage> createState() => _UserDetailPageState();
+}
+
+class _UserDetailPageState extends State<UserDetailPage> {
+  final supabase = Supabase.instance.client;
+
+  Future<void> _topUpUser(double currentCredit) async {
     final TextEditingController amountCtrl = TextEditingController();
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add Top-Up',
+        title: Text('Top-Up User',
             style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1230,26 +3289,24 @@ class _AdminPageState extends State<AdminPage> {
               final amount = double.tryParse(amountCtrl.text);
               if (amount == null || amount <= 0) return;
 
-              Navigator.pop(context); // Close dialog
+              Navigator.pop(context);
 
               try {
-                // 1. Record Top-up
                 await supabase.from('top_ups').insert({
-                  'meter_id': meterId,
+                  'meter_id': widget.meterId,
                   'amount': amount,
                   'method': 'Admin Manual',
                   'timestamp': DateTime.now().toIso8601String(),
                 });
 
-                // 2. Update Meter Credit
                 final newCredit = currentCredit + amount;
                 await supabase
                     .from('meters')
-                    .update({'current_credit': newCredit}).eq('id', meterId);
+                    .update({'current_credit': newCredit}).eq(
+                        'id', widget.meterId!);
 
                 setState(() {});
                 if (mounted) {
-                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Top-up of \$$amount successful!'),
@@ -1259,9 +3316,8 @@ class _AdminPageState extends State<AdminPage> {
                 }
               } catch (e) {
                 if (mounted) {
-                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error processing top-up: $e')),
+                    SnackBar(content: Text('Error: $e')),
                   );
                 }
               }
@@ -1274,15 +3330,362 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  Future<void> _toggleValve(bool currentStatus) async {
+    try {
+      await supabase
+          .from('meters')
+          .update({'valve_status': !currentStatus}).eq('id', widget.meterId!);
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Valve ${!currentStatus ? "OPENED" : "CLOSED"} successfully'),
+            backgroundColor: !currentStatus ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Admin Management',
+        title: Text('User Details',
             style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.indigo[900],
         foregroundColor: Colors.white,
       ),
+      body: FutureBuilder(
+        future: supabase
+            .from('profiles')
+            .select()
+            .eq('id', widget.userId)
+            .single(),
+        builder: (context, userSnapshot) {
+          if (!userSnapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final user = userSnapshot.data!;
+          final email = user['email'] ?? 'No email';
+          final fullName = user['full_name'] ?? 'No name';
+
+          if (widget.meterId == null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.gas_meter, size: 80, color: Colors.grey),
+                  const SizedBox(height: 24),
+                  Text('No Meter Assigned',
+                      style: GoogleFonts.inter(fontSize: 20)),
+                  const SizedBox(height: 16),
+                  Text(fullName, style: GoogleFonts.inter(fontSize: 16)),
+                  Text(email,
+                      style:
+                          GoogleFonts.inter(fontSize: 14, color: Colors.grey)),
+                ],
+              ),
+            );
+          }
+
+          return StreamBuilder(
+            stream: supabase
+                .from('meters')
+                .stream(primaryKey: ['id']).eq('id', widget.meterId!),
+            builder: (context, meterSnapshot) {
+              double credit = 0.0;
+              bool valveStatus = true;
+
+              if (meterSnapshot.hasData && meterSnapshot.data!.isNotEmpty) {
+                final meter = meterSnapshot.data![0];
+                credit = double.tryParse(
+                        meter['current_credit']?.toString() ?? '0') ??
+                    0.0;
+                valveStatus = meter['valve_status'] == true;
+              }
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('User Information',
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold)),
+                            const Divider(),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.person),
+                              title: const Text('Full Name'),
+                              subtitle: Text(fullName),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.email),
+                              title: const Text('Email'),
+                              subtitle: Text(email),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.gas_meter),
+                              title: const Text('Meter ID'),
+                              subtitle: SelectableText(
+                                  widget.meterId ?? 'Not assigned'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Credit Balance',
+                                    style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold)),
+                                ElevatedButton.icon(
+                                  onPressed: () => _topUpUser(credit),
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Top Up'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.indigo,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '\$${credit.toStringAsFixed(2)}',
+                              style: GoogleFonts.inter(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            Text('Valve Control',
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 16),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Meter Valve'),
+                              subtitle: Text(
+                                valveStatus ? 'Valve OPEN' : 'Valve CLOSED',
+                                style: TextStyle(
+                                    color:
+                                        valveStatus ? Colors.green : Colors.red,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              value: valveStatus,
+                              activeThumbColor: Colors.green,
+                              inactiveThumbColor: Colors.red,
+                              onChanged: (val) => _toggleValve(valveStatus),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Register User Page
+class RegisterUserPage extends StatefulWidget {
+  const RegisterUserPage({super.key});
+
+  @override
+  State<RegisterUserPage> createState() => _RegisterUserPageState();
+}
+
+class _RegisterUserPageState extends State<RegisterUserPage> {
+  final supabase = Supabase.instance.client;
+  final emailCtrl = TextEditingController();
+  final passwordCtrl = TextEditingController();
+  final nameCtrl = TextEditingController();
+  String selectedRole = 'user'; // Default role
+  bool loading = false;
+
+  Future<void> _registerUser() async {
+    if (emailCtrl.text.isEmpty ||
+        passwordCtrl.text.isEmpty ||
+        nameCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+
+    setState(() => loading = true);
+
+    try {
+      final response = await supabase.auth.signUp(
+        email: emailCtrl.text.trim(),
+        password: passwordCtrl.text,
+      );
+
+      if (response.user != null) {
+        await supabase.from('profiles').insert({
+          'id': response.user!.id,
+          'email': emailCtrl.text.trim(),
+          'full_name': nameCtrl.text,
+          'role': selectedRole,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('User registered successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+
+    setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Register New User',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo[900],
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Full Name',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'User Role',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.admin_panel_settings),
+              ),
+              value: selectedRole,
+              items: const [
+                DropdownMenuItem(value: 'user', child: Text('User')),
+                DropdownMenuItem(value: 'admin', child: Text('Admin')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => selectedRole = value);
+                }
+              },
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: loading ? null : _registerUser,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                ),
+                child: loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Register User', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Meters Tab
+class AdminMetersTab extends StatelessWidget {
+  const AdminMetersTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+
+    return Scaffold(
       body: StreamBuilder(
         stream: supabase.from('meters').stream(primaryKey: ['id']),
         builder: (context, snapshot) {
@@ -1290,7 +3693,7 @@ class _AdminPageState extends State<AdminPage> {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No active meters found'));
+            return const Center(child: Text('No meters registered'));
           }
 
           final meters = snapshot.data!;
@@ -1303,122 +3706,364 @@ class _AdminPageState extends State<AdminPage> {
               final meterId = meter['id'];
               final valveStatus = meter['valve_status'] == true;
               final currentCredit =
-                  double.tryParse(meter['current_credit'].toString()) ?? 0.0;
-              final lastHeartbeat = meter['last_heartbeat'] ?? 'Unknown';
+                  double.tryParse(meter['current_credit']?.toString() ?? '0') ??
+                      0.0;
 
               return Card(
-                elevation: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: Icon(
+                    Icons.gas_meter,
+                    color: valveStatus ? Colors.green : Colors.red,
+                    size: 40,
+                  ),
+                  title: Text(
+                    'Meter ${meterId.toString().substring(0, 8)}...',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Meter ID',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 12, color: Colors.grey[600])),
-                              Text('${meterId.toString().substring(0, 8)}...',
-                                  style: GoogleFonts.inter(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: valveStatus
-                                  ? Colors.green[100]
-                                  : Colors.red[100],
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              valveStatus ? 'Active' : 'Shutoff',
-                              style: TextStyle(
-                                color: valveStatus
-                                    ? Colors.green[800]
-                                    : Colors.red[800],
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Credit Balance',
-                                    style: TextStyle(color: Colors.grey[600])),
-                                Text('\$${currentCredit.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () => _addTopUp(meterId, currentCredit),
-                            icon: const Icon(Icons.add_card, size: 18),
-                            label: const Text('Top Up'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo,
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Valve Control'),
-                        subtitle: Text(
-                            valveStatus
-                                ? 'Valve is currently OPEN'
-                                : 'Valve is currently CLOSED',
-                            style: TextStyle(
-                                color:
-                                    valveStatus ? Colors.green : Colors.red)),
-                        value: valveStatus,
-                        activeThumbColor: Colors.green,
-                        inactiveThumbColor: Colors.red,
-                        onChanged: (val) => _toggleValve(meterId, valveStatus),
-                      ),
-                      const Divider(),
-                      ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        title: const Text('Device Credentials & Details'),
-                        children: [
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Full Meter ID'),
-                            subtitle: SelectableText(meterId),
-                          ),
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Last Heartbeat'),
-                            subtitle: Text(lastHeartbeat.toString()),
-                          ),
-                        ],
+                      Text('Credit: \$${currentCredit.toStringAsFixed(2)}',
+                          style: GoogleFonts.inter()),
+                      Text(
+                        valveStatus ? 'Active' : 'Shutoff',
+                        style: GoogleFonts.inter(
+                          color: valveStatus ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MeterDetailPage(meterId: meterId),
+                      ),
+                    );
+                  },
                 ),
               );
             },
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RegisterMeterPage()),
+          );
+        },
+        backgroundColor: Colors.indigo,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Meter'),
+      ),
+    );
+  }
+}
+
+// Meter Detail Page
+class MeterDetailPage extends StatelessWidget {
+  final String meterId;
+
+  const MeterDetailPage({super.key, required this.meterId});
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Meter Details',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo[900],
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder(
+        stream:
+            supabase.from('meters').stream(primaryKey: ['id']).eq('id', meterId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final meter = snapshot.data![0];
+          final valveStatus = meter['valve_status'] == true;
+          final currentCredit =
+              double.tryParse(meter['current_credit']?.toString() ?? '0') ?? 0.0;
+          final usageRate =
+              double.tryParse(meter['usage_rate']?.toString() ?? '0') ?? 0.0;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Meter Information',
+                            style: GoogleFonts.inter(
+                                fontSize: 20, fontWeight: FontWeight.bold)),
+                        const Divider(),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Meter ID'),
+                          subtitle: SelectableText(meterId),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Valve Status'),
+                          subtitle: Text(
+                            valveStatus ? 'OPEN' : 'CLOSED',
+                            style: TextStyle(
+                              color: valveStatus ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Current Credit'),
+                          subtitle: Text(
+                            '\$${currentCredit.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Usage Rate'),
+                          subtitle: Text('\$${usageRate.toStringAsFixed(2)}/m³'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Register Meter Page
+class RegisterMeterPage extends StatefulWidget {
+  const RegisterMeterPage({super.key});
+
+  @override
+  State<RegisterMeterPage> createState() => _RegisterMeterPageState();
+}
+
+class _RegisterMeterPageState extends State<RegisterMeterPage> {
+  final supabase = Supabase.instance.client;
+  String? selectedUserId;
+  bool loading = false;
+
+  Future<void> _registerMeter() async {
+    if (selectedUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a user')),
+      );
+      return;
+    }
+
+    setState(() => loading = true);
+
+    try {
+      // Create new meter
+      final meterResponse = await supabase
+          .from('meters')
+          .insert({
+            'user_id': selectedUserId,
+            'current_credit': 0.0,
+            'usage_rate': 0.05,
+            'valve_status': true,
+          })
+          .select()
+          .single();
+
+      final newMeterId = meterResponse['id'];
+
+      // Update user profile with meter_id
+      await supabase
+          .from('profiles')
+          .update({'meter_id': newMeterId}).eq('id', selectedUserId!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Meter registered successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+
+    setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Register New Meter',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.indigo[900],
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Assign meter to user:',
+              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            StreamBuilder(
+              stream: supabase.from('profiles').stream(primaryKey: ['id']),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Text('No users available');
+                }
+
+                final users = snapshot.data!;
+
+                return DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Select User',
+                  ),
+                  value: selectedUserId,
+                  items: users.map<DropdownMenuItem<String>>((user) {
+                    final fullName = user['full_name'] ?? 'No name';
+                    final email = user['email'] ?? '';
+                    return DropdownMenuItem<String>(
+                      value: user['id'],
+                      child: Text('$fullName ($email)'),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => selectedUserId = value);
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: loading ? null : _registerMeter,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                ),
+                child: loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Register Meter', style: TextStyle(fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Settings Tab
+class AdminSettingsTab extends StatelessWidget {
+  const AdminSettingsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final supabase = Supabase.instance.client;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Admin Settings',
+              style:
+                  GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.person),
+                  title: const Text('Account Information'),
+                  subtitle: Text(supabase.auth.currentUser?.email ?? 'No email'),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.notifications),
+                  title: const Text('Notifications'),
+                  subtitle: const Text('Manage alert preferences'),
+                  trailing: Switch(
+                    value: true,
+                    onChanged: (val) {},
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.attach_money),
+                  title: const Text('Default Usage Rate'),
+                  subtitle: const Text('\$0.05 per m³'),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.info),
+                  title: const Text('System Information'),
+                  subtitle: const Text('FluxGuard v1.0.0'),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            color: Colors.red[50],
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: Text('Sign Out',
+                  style: GoogleFonts.inter(
+                      color: Colors.red, fontWeight: FontWeight.bold)),
+              onTap: () async {
+                await supabase.auth.signOut();
+                if (context.mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
