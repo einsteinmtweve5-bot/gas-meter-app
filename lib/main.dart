@@ -135,9 +135,7 @@ class _LoginPageState extends State<LoginPage> {
           height: MediaQuery.of(context).size.height,
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: NetworkImage(
-                'https://media.gettyimages.com/id/157612903/photo/gas-burner.jpg?s=1024x1024&w=gi&k=20&c=2yJixLIYdXOB51MH2wTv24-qiOO0TneL3qVUG38omJQ=',
-              ),
+              image: AssetImage('assets/gas.jpg'),
               fit: BoxFit.cover,
             ),
           ),
@@ -433,7 +431,7 @@ class DashboardPage extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.green.withOpacity(0.4),
+                                        color: Colors.green.withAlpha(100),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -443,10 +441,33 @@ class DashboardPage extends StatelessWidget {
                                     color: Colors.transparent,
                                     child: InkWell(
                                       onTap: () async {
-                                        await supabase
-                                            .from('meters')
-                                            .update({'valve_status': true}).eq(
-                                                'id', meterId);
+                                        try {
+                                          await supabase
+                                              .from('meters')
+                                              .update({'valve_status': true}).eq(
+                                                  'id', meterId);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content:
+                                                    Text('Opening Valve...'),
+                                                backgroundColor: Colors.green,
+                                                duration: Duration(seconds: 1),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        }
                                       },
                                       borderRadius: BorderRadius.circular(16),
                                       child: Padding(
@@ -481,7 +502,7 @@ class DashboardPage extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.red.withOpacity(0.4),
+                                        color: Colors.red.withAlpha(100),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -491,10 +512,33 @@ class DashboardPage extends StatelessWidget {
                                     color: Colors.transparent,
                                     child: InkWell(
                                       onTap: () async {
-                                        await supabase
-                                            .from('meters')
-                                            .update({'valve_status': false}).eq(
-                                                'id', meterId);
+                                        try {
+                                          await supabase
+                                              .from('meters')
+                                              .update({'valve_status': false}).eq(
+                                                  'id', meterId);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content:
+                                                    Text('Closing Valve...'),
+                                                backgroundColor: Colors.red,
+                                                duration: Duration(seconds: 1),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        }
                                       },
                                       borderRadius: BorderRadius.circular(16),
                                       child: Padding(
@@ -1205,6 +1249,7 @@ class _AdminPageState extends State<AdminPage> {
 
                 setState(() {});
                 if (mounted) {
+                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Top-up of \$$amount successful!'),
@@ -1214,6 +1259,7 @@ class _AdminPageState extends State<AdminPage> {
                 }
               } catch (e) {
                 if (mounted) {
+                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error processing top-up: $e')),
                   );
@@ -1279,7 +1325,7 @@ class _AdminPageState extends State<AdminPage> {
                               Text('Meter ID',
                                   style: GoogleFonts.inter(
                                       fontSize: 12, color: Colors.grey[600])),
-                              Text(meterId.toString().substring(0, 8) + '...',
+                              Text('${meterId.toString().substring(0, 8)}...',
                                   style: GoogleFonts.inter(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16)),
@@ -1345,7 +1391,7 @@ class _AdminPageState extends State<AdminPage> {
                                 color:
                                     valveStatus ? Colors.green : Colors.red)),
                         value: valveStatus,
-                        activeColor: Colors.green,
+                        activeThumbColor: Colors.green,
                         inactiveThumbColor: Colors.red,
                         onChanged: (val) => _toggleValve(meterId, valveStatus),
                       ),
