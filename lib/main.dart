@@ -452,8 +452,42 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+  String? meterId; // User's specific meter ID from profile
   bool? _localValveStatus; // Local override for immediate UI update
+  bool _isLoadingMeterId = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserMeterId();
+  }
+
+  Future<void> _loadUserMeterId() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final profile = await supabase
+            .from('profiles')
+            .select('meter_id')
+            .eq('id', userId)
+            .single();
+        
+        setState(() {
+          meterId = profile['meter_id'];
+          _isLoadingMeterId = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMeterId = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingMeterId = false;
+      });
+    }
+  }
 
   Future<void> _cacheData(
       double credit, bool valveOpen, double flowRate) async {
@@ -466,6 +500,25 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _toggleValve(bool newStatus) async {
     final supabase = Supabase.instance.client;
 
+    // Check if meter ID is available
+    if (meterId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No meter assigned to your account',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _localValveStatus = newStatus;
     });
@@ -473,7 +526,7 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       await supabase
           .from('meters')
-          .update({'valve_status': newStatus}).eq('id', meterId);
+          .update({'valve_status': newStatus}).eq('id', meterId!);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -510,23 +563,93 @@ class _DashboardPageState extends State<DashboardPage> {
     final supabase = Supabase.instance.client;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Show loading indicator while fetching meter ID
+    if (_isLoadingMeterId) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.indigo[700]),
+              const SizedBox(height: 16),
+              Text(
+                'Loading your meter...',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show message if no meter is assigned
+    if (meterId == null) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.gas_meter_outlined,
+                  size: 80,
+                  color: isDark ? Colors.grey[700] : Colors.grey[400],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No Meter Assigned',
+                  style: GoogleFonts.outfit(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Please contact your administrator to assign a meter to your account.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       body: StreamBuilder(
         stream: supabase
             .from('meters')
-            .stream(primaryKey: ['id']).eq('id', meterId),
+            .stream(primaryKey: ['id']).eq('id', meterId!),
         builder: (context, snapshot) {
           double credit = 80.0;
           bool valveOpen = true;
           double flowRate = 0.0;
+          double totalVolume = 0.0;
+          double velocity = 0.0;
+          bool leakDetected = false;
           bool isOffline = false;
 
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             final meter = snapshot.data![0];
-            credit = double.tryParse(meter['current_credit'].toString()) ?? 80.0;
+            credit = double.tryParse(meter['current_credit']?.toString() ?? '80.0') ?? 80.0;
             valveOpen = _localValveStatus ?? (meter['valve_status'] == true);
-            flowRate = double.tryParse(meter['current_reading'].toString()) ?? 0.0;
+            flowRate = double.tryParse(meter['current_reading']?.toString() ?? '0.0') ?? 0.0;
+            totalVolume = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
+            velocity = double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
+            leakDetected = meter['gas_leak'] == true;
+            
             _cacheData(credit, valveOpen, flowRate);
           } else {
             isOffline = true;
@@ -574,9 +697,16 @@ class _DashboardPageState extends State<DashboardPage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      // Credit Card
+                    child: Column(
+                      children: [
+                        // Leak Detection Alert
+                        if (leakDetected)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: _buildLeakAlert(isDark),
+                          ),
+
+                        // Credit Card
                       TweenAnimationBuilder<double>(
                         tween: Tween(begin: 0.0, end: 1.0),
                         duration: const Duration(milliseconds: 600),
@@ -651,7 +781,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           axes: <RadialAxis>[
                             RadialAxis(
                               minimum: 0,
-                              maximum: 6,
+                              maximum: 5, // Velocity in m/s
                               startAngle: 180,
                               endAngle: 0,
                               showLabels: false,
@@ -664,23 +794,23 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                               pointers: <GaugePointer>[
                                 RangePointer(
-                                  value: flowRate,
+                                  value: velocity,
                                   width: 0.2,
                                   sizeUnit: GaugeSizeUnit.factor,
                                   cornerStyle: CornerStyle.bothCurve,
                                   gradient: const SweepGradient(
-                                    colors: [Colors.cyan, Colors.purple],
+                                    colors: [Colors.orange, Colors.red],
                                     stops: [0.0, 1.0],
                                   ),
                                 ),
                                 MarkerPointer(
-                                  value: flowRate,
+                                  value: velocity,
                                   markerType: MarkerType.circle,
                                   color: Colors.white,
                                   markerHeight: 16,
                                   markerWidth: 16,
                                   borderWidth: 4,
-                                  borderColor: Colors.purple,
+                                  borderColor: Colors.red,
                                 ),
                               ],
                               annotations: <GaugeAnnotation>[
@@ -689,7 +819,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        flowRate.toStringAsFixed(1),
+                                        velocity.toStringAsFixed(2),
                                         style: GoogleFonts.outfit(
                                           fontSize: 48,
                                           fontWeight: FontWeight.bold,
@@ -697,7 +827,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                         ),
                                       ),
                                       Text(
-                                        'L/min',
+                                        'm/s Velocity',
                                         style: GoogleFonts.inter(
                                           fontSize: 14,
                                           color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -707,6 +837,56 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ),
                                   angle: 90,
                                   positionFactor: 0.1,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Total Volume Card
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.gas_meter, color: Colors.orange, size: 32),
+                            ),
+                            const SizedBox(width: 16),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Gas Amount',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  '${totalVolume.toStringAsFixed(2)} Liters',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
                                 ),
                               ],
                             ),
@@ -856,6 +1036,46 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLeakAlert(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.red.withOpacity(0.5), width: 2),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 40),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'GAS LEAK DETECTED',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                Text(
+                  'Valve has been automatically closed for your safety.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: isDark ? Colors.red[200] : Colors.red[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1449,15 +1669,117 @@ class AlertsPage extends StatelessWidget {
   }
 }
 
-class TopUpPage extends StatelessWidget {
+class TopUpPage extends StatefulWidget {
   const TopUpPage({super.key});
 
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+  @override
+  State<TopUpPage> createState() => _TopUpPageState();
+}
+
+class _TopUpPageState extends State<TopUpPage> {
+  String? meterId;
+  bool _isLoadingMeterId = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserMeterId();
+  }
+
+  Future<void> _loadUserMeterId() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final profile = await supabase
+            .from('profiles')
+            .select('meter_id')
+            .eq('id', userId)
+            .single();
+        
+        setState(() {
+          meterId = profile['meter_id'];
+          _isLoadingMeterId = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMeterId = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingMeterId = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Show loading indicator
+    if (_isLoadingMeterId) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.orange[700]),
+              const SizedBox(height: 16),
+              Text(
+                'Loading transactions...',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show message if no meter assigned
+    if (meterId == null) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 80,
+                  color: isDark ? Colors.grey[700] : Colors.grey[400],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No Meter Assigned',
+                  style: GoogleFonts.outfit(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'You need a meter assigned to view payment history.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
@@ -1511,7 +1833,7 @@ class TopUpPage extends StatelessWidget {
             stream: supabase
                 .from('top_ups')
                 .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId)
+                .eq('meter_id', meterId!)
                 .order('timestamp', ascending: false),
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -1687,11 +2009,56 @@ class _AIChatPageState extends State<AIChatPage> {
   bool _loading = false;
 
   final String groqKey = AppConfig.groqApiKey;
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+  String? meterId;
+  bool _isLoadingMeterId = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserMeterId();
+  }
+
+  Future<void> _loadUserMeterId() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final profile = await supabase
+            .from('profiles')
+            .select('meter_id')
+            .eq('id', userId)
+            .single();
+        
+        setState(() {
+          meterId = profile['meter_id'];
+          _isLoadingMeterId = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMeterId = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingMeterId = false;
+      });
+    }
+  }
 
   Future<void> _sendMessage() async {
     final userMessage = _controller.text.trim();
     if (userMessage.isEmpty) return;
+
+    // Check if meter ID is available
+    if (meterId == null) {
+      setState(() {
+        _messages.add({
+          'role': 'model',
+          'text': 'No meter assigned to your account. Please contact your administrator.'
+        });
+      });
+      return;
+    }
 
     setState(() {
       _messages.add({'role': 'user', 'text': userMessage});
@@ -1707,7 +2074,7 @@ class _AIChatPageState extends State<AIChatPage> {
     try {
       final supabase = Supabase.instance.client;
       final meter =
-          await supabase.from('meters').select().eq('id', meterId).single();
+          await supabase.from('meters').select().eq('id', meterId!).single();
       currentCredit =
           double.tryParse(meter['current_credit'].toString()) ?? 80.0;
       valveOpen = meter['valve_status'] == true;
@@ -1715,13 +2082,13 @@ class _AIChatPageState extends State<AIChatPage> {
       final topUps = await supabase
           .from('top_ups')
           .select()
-          .eq('meter_id', meterId)
+          .eq('meter_id', meterId!)
           .order('timestamp', ascending: false)
           .limit(1);
       if (topUps.isNotEmpty) lastTopUp = '+${topUps[0]['amount']}';
 
       final alerts =
-          await supabase.from('alerts').select().eq('meter_id', meterId);
+          await supabase.from('alerts').select().eq('meter_id', meterId!);
       alertCount = alerts.length;
     } catch (e) {
       // Silent — use defaults
@@ -1787,6 +2154,37 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Show loading indicator
+    if (_isLoadingMeterId) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        appBar: AppBar(
+          title: Text('FluxGuard AI',
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          foregroundColor: isDark ? Colors.white : Colors.indigo[900],
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.indigo[700]),
+              const SizedBox(height: 16),
+              Text(
+                'Initializing AI chat...',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
@@ -2780,7 +3178,8 @@ class AdminDashboardTab extends StatelessWidget {
                   int totalUsers = 0;
                   int totalMeters = 0;
                   double totalCredits = 0.0;
-                  double totalUsage = 0.0;
+                  double totalUsageM3 = 0.0;
+                  double totalAmountLiters = 0.0;
                   int activeMeters = 0;
 
                   if (profileSnapshot.hasData) {
@@ -2793,8 +3192,11 @@ class AdminDashboardTab extends StatelessWidget {
                       totalCredits += double.tryParse(
                               meter['current_credit']?.toString() ?? '0') ??
                           0.0;
-                      totalUsage += double.tryParse(
+                      totalUsageM3 += double.tryParse(
                               meter['current_reading']?.toString() ?? '0') ??
+                          0.0;
+                      totalAmountLiters += double.tryParse(
+                              meter['total_volume']?.toString() ?? '0') ??
                           0.0;
                       if (meter['valve_status'] == true) activeMeters++;
                     }
@@ -2854,14 +3256,30 @@ class AdminDashboardTab extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      _buildStatCard(
-                        'Total Gas Consumed',
-                        '${totalUsage.toStringAsFixed(2)} m³',
-                        Icons.analytics_outlined,
-                        Colors.indigoAccent,
-                        isDark,
-                        400,
-                        fullWidth: true,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              'Total (m³)',
+                              '${totalUsageM3.toStringAsFixed(2)}',
+                              Icons.analytics_outlined,
+                              Colors.indigoAccent,
+                              isDark,
+                              400,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatCard(
+                              'Total (Liters)',
+                              '${totalAmountLiters.toStringAsFixed(0)}',
+                              Icons.gas_meter,
+                              Colors.orangeAccent,
+                              isDark,
+                              500,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   );
@@ -3027,8 +3445,22 @@ class AdminDashboardTab extends StatelessWidget {
 }
 
 // Users Tab
-class AdminUsersTab extends StatelessWidget {
+class AdminUsersTab extends StatefulWidget {
   const AdminUsersTab({super.key});
+
+  @override
+  State<AdminUsersTab> createState() => _AdminUsersTabState();
+}
+
+class _AdminUsersTabState extends State<AdminUsersTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3037,194 +3469,316 @@ class AdminUsersTab extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: StreamBuilder(
-        stream: supabase.from('profiles').stream(primaryKey: ['id']),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people_outline, size: 60, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text('No users found',
-                      style: GoogleFonts.inter(color: Colors.grey[500])),
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[850] : Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
                 ],
               ),
-            );
-          }
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase().trim();
+                  });
+                },
+                style: GoogleFonts.inter(
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search users...',
+                  hintStyle: GoogleFonts.inter(
+                    color: Colors.grey,
+                  ),
+                  prefixIcon: const Icon(Icons.search, color: Colors.indigoAccent),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.grey),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                ),
+              ),
+            ),
+          ),
 
-          final users = snapshot.data!;
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            physics: const BouncingScrollPhysics(),
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              final userId = user['id'];
-              final email = user['email'] ?? 'No email';
-              final fullName = user['full_name'] ?? 'No name';
-              final meterId = user['meter_id'];
-
-              return TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: Duration(milliseconds: 300 + (index * 50)),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) {
-                  return Transform.translate(
-                    offset: Offset(0, 30 * (1 - value)),
-                    child: Opacity(
-                      opacity: value,
-                      child: FutureBuilder(
-                        future: meterId != null
-                            ? supabase
-                                .from('meters')
-                                .select('current_credit')
-                                .eq('id', meterId)
-                                .single()
-                            : null,
-                        builder: (context, meterSnapshot) {
-                          double credit = 0.0;
-                          if (meterSnapshot.hasData) {
-                            credit = double.tryParse(meterSnapshot
-                                        .data!['current_credit']
-                                        ?.toString() ??
-                                    '0') ??
-                                0.0;
-                          }
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E2336)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(20),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => UserDetailPage(
-                                          userId: userId, meterId: meterId),
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            colors: [
-                                              Colors.indigo,
-                                              Colors.blueAccent
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color:
-                                                  Colors.indigo.withOpacity(0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          fullName.isNotEmpty
-                                              ? fullName[0].toUpperCase()
-                                              : 'U',
-                                          style: GoogleFonts.outfit(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 20,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              fullName,
-                                              style: GoogleFonts.outfit(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : Colors.black87,
-                                              ),
-                                            ),
-                                            Text(
-                                              email,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.account_balance_wallet,
-                                                  size: 14,
-                                                  color: Colors.greenAccent,
-                                                ),
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '\$${credit.toStringAsFixed(2)}',
-                                                  style: GoogleFonts.inter(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 13,
-                                                    color: Colors.greenAccent,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(Icons.chevron_right_rounded,
-                                          color: Colors.grey[400]),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+          // Users List
+          Expanded(
+            child: StreamBuilder(
+              stream: supabase.from('profiles').stream(primaryKey: ['id']),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                        const SizedBox(height: 16),
+                        Text('Something went wrong',
+                            style: GoogleFonts.inter(color: Colors.grey)),
+                      ],
                     ),
                   );
-                },
-              );
-            },
-          );
-        },
+                }
+                
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.indigo),
+                  );
+                }
+
+                // Filter users based on search query
+                final allUsers = snapshot.data!;
+                final users = allUsers.where((user) {
+                  final email = (user['email'] ?? '').toString().toLowerCase();
+                  final name = (user['full_name'] ?? '').toString().toLowerCase();
+                  return email.contains(_searchQuery) ||
+                         name.contains(_searchQuery);
+                }).toList();
+
+                if (users.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off, size: 60, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchQuery.isEmpty 
+                              ? 'No users found' 
+                              : 'No matches found',
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: Colors.grey[500]
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: users.length,
+                  itemBuilder: (context, index) {
+                    final user = users[index];
+                    final userId = user['id'];
+                    final email = user['email'] ?? 'No email';
+                    final fullName = user['full_name'] ?? 'No name';
+                    final meterId = user['meter_id'];
+
+                    return TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 400 + (index * 100)),
+                      curve: Curves.easeOutQuart,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 20 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.indigo.withOpacity(0.08),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: isDark ? Colors.white10 : Colors.indigo.withOpacity(0.05),
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => UserDetailPage(
+                                      userId: userId, meterId: meterId),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  // Avatar
+                                  Hero(
+                                    tag: 'avatar_$userId',
+                                    child: Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.indigo.shade400,
+                                            Colors.indigo.shade800,
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.indigo.withOpacity(0.4),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        fullName.isNotEmpty
+                                            ? fullName[0].toUpperCase()
+                                            : 'U',
+                                        style: GoogleFonts.outfit(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 24,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  
+                                  const SizedBox(width: 20),
+                                  
+                                  // Info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          fullName,
+                                          style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 18,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          email,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        
+                                        // Credit Pill
+                                        FutureBuilder(
+                                          future: meterId != null
+                                              ? supabase
+                                                  .from('meters')
+                                                  .select('current_credit')
+                                                  .eq('id', meterId)
+                                                  .single()
+                                              : null,
+                                          builder: (context, meterSnapshot) {
+                                            double credit = 0.0;
+                                            if (meterSnapshot.hasData) {
+                                              credit = double.tryParse(meterSnapshot
+                                                          .data!['current_credit']
+                                                          ?.toString() ??
+                                                      '0') ??
+                                                  0.0;
+                                            }
+              
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: Colors.green.withOpacity(0.2)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.account_balance_wallet,
+                                                    size: 14,
+                                                    color: Colors.green,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    '\$${credit.toStringAsFixed(2)}',
+                                                    style: GoogleFonts.inter(
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 12,
+                                                      color: Colors.green,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // Arrow
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      size: 20,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -3234,9 +3788,12 @@ class AdminUsersTab extends StatelessWidget {
           );
         },
         backgroundColor: Colors.indigoAccent,
-        elevation: 4,
-        icon: const Icon(Icons.person_add_rounded),
-        label: Text('Add User', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        elevation: 8,
+        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+        label: Text(
+          'Add User',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
       ),
     );
   }
@@ -3255,6 +3812,273 @@ class UserDetailPage extends StatefulWidget {
 
 class _UserDetailPageState extends State<UserDetailPage> {
   final supabase = Supabase.instance.client;
+  String? _currentMeterId; // Track the current meter ID in state
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMeterId = widget.meterId;
+  }
+
+  Future<void> _changeMeter() async {
+    try {
+      // Fetch all available meters
+      final meters = await supabase.from('meters').select();
+      
+      if (!mounted) return;
+      
+      String? selectedMeterId = _currentMeterId;
+      String searchQuery = '';
+      
+      await showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            // Filter meters based on search query
+            final filteredMeters = meters.where((meter) {
+              final meterId = meter['id'].toString().toLowerCase();
+              final credit = meter['current_credit']?.toString() ?? '0';
+              return meterId.contains(searchQuery.toLowerCase()) ||
+                     credit.contains(searchQuery);
+            }).toList();
+            
+            return AlertDialog(
+              title: Text('Change Meter Assignment',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Select a meter to assign to this user',
+                      style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 16),
+                    // Search bar
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Search Meter',
+                        hintText: 'Search by ID or credit...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          searchQuery = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // Scrollable meter list
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      child: filteredMeters.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Text(
+                                  'No meters found',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : ListView(
+                              shrinkWrap: true,
+                              children: [
+                                // Option to remove meter
+                                RadioListTile<String?>(
+                                  title: const Text('No Meter (Remove Assignment)'),
+                                  subtitle: Text(
+                                    'User will have no meter assigned',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  value: null,
+                                  groupValue: selectedMeterId,
+                                  onChanged: (value) {
+                                    setDialogState(() {
+                                      selectedMeterId = value;
+                                    });
+                                  },
+                                ),
+                                const Divider(),
+                                // List of meters
+                                ...filteredMeters.map((meter) {
+                                  final meterId = meter['id'];
+                                  final credit = double.tryParse(
+                                          meter['current_credit']?.toString() ?? '0') ??
+                                      0.0;
+                                  final valveStatus = meter['valve_status'] == true;
+                                  
+                                  return RadioListTile<String>(
+                                    title: Text(
+                                      meterId.toString().substring(0, 20) + '...',
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Credit: \$${credit.toStringAsFixed(2)}',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: Colors.green[700],
+                                          ),
+                                        ),
+                                        Text(
+                                          'Status: ${valveStatus ? "Open" : "Closed"}',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: valveStatus ? Colors.green : Colors.red,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    value: meterId,
+                                    groupValue: selectedMeterId,
+                                    onChanged: (value) {
+                                      setDialogState(() {
+                                        selectedMeterId = value;
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ],
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Note: Multiple users can share the same meter.',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.blue[700],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    
+                    try {
+                      await supabase.from('profiles').update({
+                        'meter_id': selectedMeterId,
+                      }).eq('id', widget.userId);
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Meter assignment updated successfully!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        // Update the state with the new meter ID
+                        setState(() {
+                          _currentMeterId = selectedMeterId;
+                        });
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  child: const Text('Update', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading meters: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteUser() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete User',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure you want to delete this user? This action cannot be undone.',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Delete user profile (Supabase auth will cascade delete)
+      await supabase.from('profiles').delete().eq('id', widget.userId);
+      
+      // Try to delete auth user (requires service role key in production)
+      // For now, just delete the profile which will prevent login
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User deleted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context); // Go back to users list
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting user: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _topUpUser(double currentCredit) async {
     final TextEditingController amountCtrl = TextEditingController();
@@ -3293,7 +4117,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
               try {
                 await supabase.from('top_ups').insert({
-                  'meter_id': widget.meterId,
+                  'meter_id': _currentMeterId,
                   'amount': amount,
                   'method': 'Admin Manual',
                   'timestamp': DateTime.now().toIso8601String(),
@@ -3303,7 +4127,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 await supabase
                     .from('meters')
                     .update({'current_credit': newCredit}).eq(
-                        'id', widget.meterId!);
+                        'id', _currentMeterId!);
 
                 setState(() {});
                 if (mounted) {
@@ -3334,7 +4158,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
     try {
       await supabase
           .from('meters')
-          .update({'valve_status': !currentStatus}).eq('id', widget.meterId!);
+          .update({'valve_status': !currentStatus}).eq('id', _currentMeterId!);
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3362,6 +4186,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
             style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.indigo[900],
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever),
+            tooltip: 'Delete User',
+            onPressed: _deleteUser,
+          ),
+        ],
       ),
       body: FutureBuilder(
         future: supabase
@@ -3378,20 +4209,123 @@ class _UserDetailPageState extends State<UserDetailPage> {
           final email = user['email'] ?? 'No email';
           final fullName = user['full_name'] ?? 'No name';
 
-          if (widget.meterId == null) {
-            return Center(
+          if (_currentMeterId == null) {
+            // Show user details with option to assign meter
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.gas_meter, size: 80, color: Colors.grey),
-                  const SizedBox(height: 24),
-                  Text('No Meter Assigned',
-                      style: GoogleFonts.inter(fontSize: 20)),
+                  // User Information Card
+                  Card(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('User Information',
+                              style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold)),
+                          const Divider(),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.person),
+                            title: const Text('Full Name'),
+                            subtitle: Text(fullName),
+                          ),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.email),
+                            title: const Text('Email'),
+                            subtitle: Text(email),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  Text(fullName, style: GoogleFonts.inter(fontSize: 16)),
-                  Text(email,
-                      style:
-                          GoogleFonts.inter(fontSize: 14, color: Colors.grey)),
+                  // No Meter Card
+                  Card(
+                    elevation: 4,
+                    color: Colors.orange[50],
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.gas_meter_outlined,
+                            size: 80,
+                            color: Colors.orange[700],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Meter Assigned',
+                            style: GoogleFonts.inter(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'This user currently has no gas meter assigned.\nAssign a meter to enable gas monitoring and control.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              onPressed: _changeMeter,
+                              icon: const Icon(Icons.add_circle_outline, size: 24),
+                              label: Text(
+                                'Assign Meter',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange[700],
+                                foregroundColor: Colors.white,
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Info Card
+                  Card(
+                    elevation: 2,
+                    color: Colors.blue[50],
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue[700], size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Multiple users can share the same meter for shared facilities.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.blue[900],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -3400,10 +4334,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
           return StreamBuilder(
             stream: supabase
                 .from('meters')
-                .stream(primaryKey: ['id']).eq('id', widget.meterId!),
+                .stream(primaryKey: ['id']).eq('id', _currentMeterId!),
             builder: (context, meterSnapshot) {
               double credit = 0.0;
               bool valveStatus = true;
+              double velocity = 0.0;
+              double totalLiters = 0.0;
 
               if (meterSnapshot.hasData && meterSnapshot.data!.isNotEmpty) {
                 final meter = meterSnapshot.data![0];
@@ -3411,6 +4347,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                         meter['current_credit']?.toString() ?? '0') ??
                     0.0;
                 valveStatus = meter['valve_status'] == true;
+                velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
+                totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
               }
 
               return SingleChildScrollView(
@@ -3447,7 +4385,18 @@ class _UserDetailPageState extends State<UserDetailPage> {
                               leading: const Icon(Icons.gas_meter),
                               title: const Text('Meter ID'),
                               subtitle: SelectableText(
-                                  widget.meterId ?? 'Not assigned'),
+                                  _currentMeterId ?? 'Not assigned'),
+                              trailing: ElevatedButton.icon(
+                                onPressed: _changeMeter,
+                                icon: const Icon(Icons.swap_horiz, size: 16),
+                                label: const Text('Change'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -3487,6 +4436,35 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                 fontWeight: FontWeight.bold,
                                 color: Colors.green,
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Sensor Real-time Data',
+                                style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold)),
+                            const Divider(),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.speed, color: Colors.blue),
+                              title: const Text('Flow Velocity'),
+                              subtitle: Text('${velocity.toStringAsFixed(2)} L/min'),
+                            ),
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.gas_meter, color: Colors.orange),
+                              title: const Text('Total Gas Amount'),
+                              subtitle: Text('${totalLiters.toStringAsFixed(2)} Liters'),
                             ),
                           ],
                         ),
@@ -3569,7 +4547,8 @@ class _RegisterUserPageState extends State<RegisterUserPage> {
       );
 
       if (response.user != null) {
-        await supabase.from('profiles').insert({
+        // Use upsert to handle cases where profile already exists from trigger
+        await supabase.from('profiles').upsert({
           'id': response.user!.id,
           'email': emailCtrl.text.trim(),
           'full_name': nameCtrl.text,
@@ -3708,6 +4687,8 @@ class AdminMetersTab extends StatelessWidget {
               final currentCredit =
                   double.tryParse(meter['current_credit']?.toString() ?? '0') ??
                       0.0;
+              final velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
+              final totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -3732,6 +4713,10 @@ class AdminMetersTab extends StatelessWidget {
                           color: valveStatus ? Colors.green : Colors.red,
                           fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      Text(
+                        'Velocity: ${velocity.toStringAsFixed(2)} L/min | Total: ${totalLiters.toStringAsFixed(1)} L',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -3796,6 +4781,8 @@ class MeterDetailPage extends StatelessWidget {
               double.tryParse(meter['current_credit']?.toString() ?? '0') ?? 0.0;
           final usageRate =
               double.tryParse(meter['usage_rate']?.toString() ?? '0') ?? 0.0;
+          final velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
+          final totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -3844,6 +4831,19 @@ class MeterDetailPage extends StatelessWidget {
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Usage Rate'),
                           subtitle: Text('\$${usageRate.toStringAsFixed(2)}/m³'),
+                        ),
+                        const Divider(),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Real-time Velocity'),
+                          subtitle: Text('${velocity.toStringAsFixed(2)} L/min'),
+                          leading: const Icon(Icons.speed, color: Colors.blue),
+                        ),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Total Gas Amount'),
+                          subtitle: Text('${totalLiters.toStringAsFixed(2)} Liters'),
+                          leading: const Icon(Icons.gas_meter, color: Colors.orange),
                         ),
                       ],
                     ),
