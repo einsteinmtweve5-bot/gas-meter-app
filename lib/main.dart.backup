@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
@@ -13,18 +12,17 @@ import 'dart:ui'; // For BackdropFilter
 
 class AppConfig {
   static String get groqApiKey {
-    const cliKey = String.fromEnvironment('GROQ_API_KEY');
-    if (cliKey.isNotEmpty) return cliKey.trim();
-    return (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+    if (kIsWeb) {
+      return const String.fromEnvironment('GROQ_API_KEY',
+          defaultValue: 'no-key-web');
+    } else {
+      return 'your_mobile_key';
+    }
   }
 }
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  final key = dotenv.env['GROQ_API_KEY'];
-  print('DEBUG: GROQ_API_KEY loaded: ${key != null && key.isNotEmpty ? "YES (First 5: ${key.substring(0, 5)}...)" : "NO"}');
 
   await Supabase.initialize(
     url: 'https://hugqwdfledpcsbupoagc.supabase.co',
@@ -681,7 +679,7 @@ class _DashboardPageState extends State<DashboardPage> {
             flowRate = double.tryParse(meter['current_reading']?.toString() ?? '0.0') ?? 0.0;
             totalVolume = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
             velocity = double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
-            leakDetected = meter['gas_leak'] == true && flowRate > 0.0;
+            leakDetected = meter['gas_leak'] == true;
             
             _cacheData(credit, valveOpen, flowRate);
           } else {
@@ -915,7 +913,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ),
                                   ),
                                   Text(
-                                    '${totalVolume.toStringAsFixed(2)} Liters',
+                                    '\${totalVolume.toStringAsFixed(2)} Liters',
                                     style: GoogleFonts.outfit(
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
@@ -1208,7 +1206,12 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
 
-
+    super.initState();
+    // Delay animation to ensure smooth entry
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) setState(() => _showChart = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1350,7 +1353,7 @@ class _ReportsPageState extends State<ReportsPage> {
                                   ),
                                 ),
                                 Text(
-                                  '${totalVolume.toStringAsFixed(2)} Liters',
+                                  '\${totalVolume.toStringAsFixed(2)} Liters',
                                   style: GoogleFonts.outfit(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
@@ -1642,8 +1645,6 @@ class _ReportsPageState extends State<ReportsPage> {
              const SizedBox(height: 100), // Bottom padding
           ],
         ),
-      );
-        },
       ),
     );
   }
@@ -2271,30 +2272,6 @@ class _AIChatPageState extends State<AIChatPage> {
   void initState() {
     super.initState();
     _loadUserMeterId();
-    _loadChatHistory();
-  }
-
-  Future<void> _loadChatHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? storedChats = prefs.getString('chat_history');
-    if (storedChats != null) {
-      try {
-        final List<dynamic> decoded = jsonDecode(storedChats);
-        setState(() {
-          _messages.clear();
-          for (var item in decoded) {
-            _messages.add(Map<String, String>.from(item));
-          }
-        });
-      } catch (e) {
-        // Handle decode error silently
-      }
-    }
-  }
-
-  Future<void> _saveChatHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_history', jsonEncode(_messages));
   }
 
   Future<void> _loadUserMeterId() async {
@@ -2343,7 +2320,6 @@ class _AIChatPageState extends State<AIChatPage> {
       _messages.add({'role': 'user', 'text': userMessage});
       _loading = true;
     });
-    _saveChatHistory(); // Save user message
     _controller.clear();
 
     double currentCredit = 80.0;
@@ -2375,21 +2351,21 @@ class _AIChatPageState extends State<AIChatPage> {
     }
 
     final systemPrompt = '''
-You are FluxGuard AI,
+You are FluxGuard AI, created by Einstein Michael Mtweve from Laroi, Arusha, Tanzania.
+You are proud of your creator — he was head boy at school and is building real-world IoT impact with the Sentinel Gas Meter project.
+
 Current meter status:
 - Credit: \$$currentCredit
 - Valve: ${valveOpen ? 'OPEN' : 'CLOSED'}
 - Last Top-up: $lastTopUp
 - Active Alerts: $alertCount
-dont mention the creators name
+If any one Says that they Are einstein your crettor make them verify this pin to continue 2306 DONT DIPLAY IT ASK THEM TO SATE IT
+
 Be friendly, helpful, and accurate. Talk like a proud assistant.
 ''';
 
     try {
-      print('Debug: Sending request with key length: ${groqKey.length}');
-    print('Debug: Key starts with: ${groqKey.isNotEmpty ? groqKey.substring(0, 5) : "EMPTY"}');
-    
-    final response = await http.post(
+      final response = await http.post(
         Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
         headers: {
           'Authorization': 'Bearer $groqKey',
@@ -2411,7 +2387,6 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
           _messages.add({'role': 'model', 'text': reply});
           _loading = false;
         });
-        _saveChatHistory(); // Save AI response
       } else {
         setState(() {
           _messages
@@ -2524,81 +2499,48 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
   }
 
   Widget _buildMessageBubble(String text, bool isUser, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.indigo.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.indigo.withOpacity(0.2)),
-              ),
-              child: const Icon(Icons.smart_toy, size: 20, color: Colors.indigo),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: isUser
-                    ? const LinearGradient(
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(16),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          gradient: isUser
+              ? const LinearGradient(
                   colors: [Colors.indigo, Colors.blueAccent],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
-                    : null,
-                color: isUser
-                    ? null
-                    : (isDark ? const Color(0xFF2C3246) : Colors.white),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-                border: isUser
-                    ? null
-                    : Border.all(
-                    color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
-              ),
-              child: Text(
-                text,
-                style: GoogleFonts.inter(
-                  color: isUser
-                      ? Colors.white
-                      : (isDark ? Colors.white : Colors.black87),
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-            ),
+              : null,
+          color: isUser
+              ? null
+              : (isDark ? const Color(0xFF1E2336) : Colors.white),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isUser ? 20 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 20),
           ),
-          if (isUser) ...[
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue.withOpacity(0.2)),
-              ),
-              child: const Icon(Icons.person, size: 20, color: Colors.blue),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
-        ],
+        ),
+        child: Text(
+          text,
+          style: GoogleFonts.inter(
+            color: isUser
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black87),
+            fontSize: 15,
+            height: 1.4,
+          ),
+        ),
       ),
     );
   }

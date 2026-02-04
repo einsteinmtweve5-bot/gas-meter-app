@@ -33,7 +33,8 @@ const float PIPE_DIAMETER_METERS = 0.015; // 15mm pipe example (Adjust to your p
 const float CROSS_SECTION_AREA = 3.14159 * sq(PIPE_DIAMETER_METERS / 2.0);
 
 // Gas Leak Threshold (Raw ADC 0-4095)
-const int GAS_THRESHOLD = 500; 
+const int GAS_THRESHOLD = 500;
+const int GAS_BASELINE_OFFSET = 200;  // Amount above baseline to trigger leak detection
 
 // Variables
 volatile long pulseCount = 0;
@@ -47,7 +48,7 @@ bool isLeakDetected = false;
 unsigned long lastUpdate = 0;
 unsigned long lastValveCheck = 0;
 bool currentValveState = false;
-bool bypassLeakDetection = true; // CHANGED: Bypass by default to allow testing
+bool bypassLeakDetection = false; // Disable bypass by default for safety
 unsigned long lastPulseTime = 0;
 long lastCheckedPulses = 0;
 
@@ -93,8 +94,17 @@ void setup() {
 void loop() {
   // Read MQ-5 Gas Sensor
   rawGasValue = analogRead(mq5Pin);
-  // Leak detected if reading is significantly higher than baseline OR above absolute threshold
-  isLeakDetected = (rawGasValue > gasBaseline + 200) || (rawGasValue > GAS_THRESHOLD);
+  // Improved leak detection: Use dynamic threshold based on baseline with safety margin
+  int dynamicThreshold = max(GAS_THRESHOLD, gasBaseline + GAS_BASELINE_OFFSET);
+  isLeakDetected = rawGasValue > dynamicThreshold;
+  
+  // Log gas detection values periodically for debugging
+  static unsigned long lastGasLog = 0;
+  if (millis() - lastGasLog > 5000) { // Log every 5 seconds
+    Serial.printf("Gas: %d | Baseline: %d | Threshold: %d | Leak: %s\n", 
+                  rawGasValue, gasBaseline, dynamicThreshold, isLeakDetected ? "YES" : "NO");
+    lastGasLog = millis();
+  }
 
   if (isLeakDetected && currentValveState && !bypassLeakDetection) {
     // Safety Force-Close Valve if leak detected

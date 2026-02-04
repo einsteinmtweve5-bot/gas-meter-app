@@ -30,7 +30,11 @@ const int RELAY_PIN = 5;    // Relay control pin
 const int MQ5_SENSOR_PIN = A0; // MQ5 gas sensor analog pin
 
 // Gas Detection Threshold
-const int GAS_THRESHOLD = 4000; // Adjust based on your environment
+const int GAS_THRESHOLD = 500; // Standard threshold for gas detection
+const int GAS_BASELINE_OFFSET = 200;  // Amount above baseline to trigger leak detection
+
+// Variables for gas detection improvement
+int gasBaseline = 0;  // Baseline value for gas sensor calibration
 
 // Flow Calculation Constants
 const float CALIBRATION_FACTOR = 4.8; // Pulses per liter (adjust based on your sensor)
@@ -100,8 +104,22 @@ void checkGasLevel() {
   // Read gas sensor value (0-4095 for ESP32 ADC)
   gasReading = analogRead(MQ5_SENSOR_PIN);
   
-  // Check if gas is detected (above threshold)
-  gasDetected = (gasReading > GAS_THRESHOLD);
+    // Improved gas detection with baseline calibration
+  if (millis() < 30000) { // First 30 seconds for initial calibration
+    gasBaseline = (gasBaseline * 0.9) + (gasReading * 0.1); // Smooth baseline calculation
+  }
+  
+  // Calculate dynamic threshold based on baseline and fixed threshold
+  int dynamicThreshold = max(GAS_THRESHOLD, gasBaseline + GAS_BASELINE_OFFSET);
+  gasDetected = (gasReading > dynamicThreshold);
+  
+  // Log gas detection values periodically for debugging
+  static unsigned long lastGasLog = 0;
+  if (millis() - lastGasLog > 5000) { // Log every 5 seconds
+    Serial.printf("Gas: %d | Baseline: %d | Threshold: %d | Leak: %s\n", 
+                  gasReading, gasBaseline, dynamicThreshold, gasDetected ? "YES" : "NO");
+    lastGasLog = millis();
+  }
   
   // Log gas status changes
   if (gasDetected && !lastGasDetected) {
@@ -246,7 +264,7 @@ void updateSupabase() {
   jsonPayload += "\"total_volume\":" + String(totalVolume, 2) + ",";
   jsonPayload += "\"velocity\":" + String(velocity, 3) + ",";
   jsonPayload += "\"sensor_connected\":" + String(sensorConnected ? "true" : "false") + ",";
-  jsonPayload += "\"leak_detected\":" + String(gasDetected ? "true" : "false") + ",";
+  jsonPayload += "\"gas_leak\":" + String(gasDetected ? "true" : "false") + ",";
   jsonPayload += "\"gas_level\":" + String(gasReading) + ",";
   jsonPayload += "\"last_updated\":\"" + getCurrentTimestamp() + "\"}";
   
