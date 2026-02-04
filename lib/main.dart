@@ -10,6 +10,7 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui'; // For BackdropFilter
+import 'services/meter_service.dart';
 
 class AppConfig {
   static String get groqApiKey {
@@ -457,11 +458,18 @@ class _DashboardPageState extends State<DashboardPage> {
   String? meterId; // User's specific meter ID from profile
   bool? _localValveStatus; // Local override for immediate UI update
   bool _isLoadingMeterId = true;
+  MeterService? _meterService; // Service to handle credit reduction
 
   @override
   void initState() {
     super.initState();
     _loadUserMeterId();
+  }
+
+  @override
+  void dispose() {
+    _meterService?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserMeterId() async {
@@ -478,6 +486,12 @@ class _DashboardPageState extends State<DashboardPage> {
         setState(() {
           meterId = profile['meter_id'];
           _isLoadingMeterId = false;
+          
+          // Initialize MeterService when meter ID is available
+          if (meterId != null) {
+            _meterService = MeterService(meterId!);
+            debugPrint('MeterService initialized for meter: $meterId');
+          }
         });
       } else {
         setState(() {
@@ -1047,7 +1061,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            '\$${credit.toStringAsFixed(2)}',
+            '${credit.toStringAsFixed(2)} TZS',
             style: GoogleFonts.outfit(
               color: Colors.white,
               fontSize: 48,
@@ -2234,7 +2248,7 @@ class _TopUpPageState extends State<TopUpPage> {
                   ),
                 ),
                 Text(
-                  '+\$${amount.toStringAsFixed(2)}',
+                  '+${amount.toStringAsFixed(2)} TZS',
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.bold,
                     fontSize: 20,
@@ -3560,7 +3574,7 @@ class AdminDashboardTab extends StatelessWidget {
                           Expanded(
                             child: _buildStatCard(
                               'Credits',
-                              '\$${totalCredits.toStringAsFixed(0)}',
+                              '${totalCredits.toStringAsFixed(0)} TZS',
                               Icons.account_balance_wallet_outlined,
                               Colors.orangeAccent,
                               isDark,
@@ -3658,7 +3672,7 @@ class AdminDashboardTab extends StatelessWidget {
                             color: Colors.green, size: 24),
                       ),
                       title: Text(
-                        '+\$${amount.toStringAsFixed(2)}',
+                        '+${amount.toStringAsFixed(2)} TZS',
                         style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -4051,7 +4065,7 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                                   ),
                                                   const SizedBox(width: 6),
                                                   Text(
-                                                    '\$${credit.toStringAsFixed(2)}',
+                                                    '${credit.toStringAsFixed(2)} TZS',
                                                     style: GoogleFonts.inter(
                                                       fontWeight: FontWeight.w600,
                                                       fontSize: 12,
@@ -4246,7 +4260,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Credit: \$${credit.toStringAsFixed(2)}',
+                                          'Credit: ${credit.toStringAsFixed(2)} TZS',
                                           style: GoogleFonts.inter(
                                             fontSize: 12,
                                             color: Colors.green[700],
@@ -4405,13 +4419,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Current Credit: \$${currentCredit.toStringAsFixed(2)}'),
+            Text('Current Credit: ${currentCredit.toStringAsFixed(2)} TZS'),
             const SizedBox(height: 16),
             TextField(
               controller: amountCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                labelText: 'Amount (\$)',
+                labelText: 'Amount (TZS)',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -4447,7 +4461,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Top-up of \$$amount successful!'),
+                      content: Text('Top-up of $amount TZS successful!'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -4744,7 +4758,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              '\$${credit.toStringAsFixed(2)}',
+                              '${credit.toStringAsFixed(2)} TZS',
                               style: GoogleFonts.inter(
                                 fontSize: 48,
                                 fontWeight: FontWeight.bold,
@@ -5019,7 +5033,7 @@ class AdminMetersTab extends StatelessWidget {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Credit: \$${currentCredit.toStringAsFixed(2)}',
+                      Text('Credit: ${currentCredit.toStringAsFixed(2)} TZS',
                           style: GoogleFonts.inter()),
                       Text(
                         valveStatus ? 'Active' : 'Shutoff',
@@ -5134,7 +5148,7 @@ class MeterDetailPage extends StatelessWidget {
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Current Credit'),
                           subtitle: Text(
-                            '\$${currentCredit.toStringAsFixed(2)}',
+                            '${currentCredit.toStringAsFixed(2)} TZS',
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -5144,7 +5158,7 @@ class MeterDetailPage extends StatelessWidget {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Usage Rate'),
-                          subtitle: Text('\$${usageRate.toStringAsFixed(2)}/m³'),
+                          subtitle: Text('${usageRate.toStringAsFixed(2)} TZS/m³'),
                         ),
                         const Divider(),
                         ListTile(
