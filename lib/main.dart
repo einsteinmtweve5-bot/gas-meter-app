@@ -14,9 +14,13 @@ import 'services/meter_service.dart';
 
 class AppConfig {
   static String get groqApiKey {
+    // Check .env first as it's more reliable in this setup
+    final envKey = dotenv.env['GROQ_API_KEY'];
+    if (envKey != null && envKey.isNotEmpty) return envKey.trim();
+    
+    // Fallback to dart-define
     const cliKey = String.fromEnvironment('GROQ_API_KEY');
-    if (cliKey.isNotEmpty) return cliKey.trim();
-    return (dotenv.env['GROQ_API_KEY'] ?? '').trim();
+    return cliKey.trim();
   }
 }
 
@@ -131,7 +135,14 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
+  final _passFocus = FocusNode();
   bool loading = false;
+
+  @override
+  void dispose() {
+    _passFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> login() async {
     setState(() => loading = true);
@@ -221,6 +232,10 @@ class _LoginPageState extends State<LoginPage> {
                       TextField(
                         controller: emailCtrl,
                         style: const TextStyle(color: Colors.white),
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) {
+                          FocusScope.of(context).requestFocus(_passFocus);
+                        },
                         decoration: InputDecoration(
                           hintText: 'Email Address',
                           hintStyle: const TextStyle(color: Colors.white70),
@@ -237,8 +252,11 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 16),
                       TextField(
                         controller: passCtrl,
+                        focusNode: _passFocus,
                         obscureText: true,
                         style: const TextStyle(color: Colors.white),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => login(),
                         decoration: InputDecoration(
                           hintText: 'Password',
                           hintStyle: const TextStyle(color: Colors.white70),
@@ -696,6 +714,12 @@ class _DashboardPageState extends State<DashboardPage> {
             totalVolume = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
             velocity = double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
             leakDetected = meter['gas_leak'] == true && flowRate > 0.0;
+
+            // Auto-close valve logic
+            if (leakDetected && (meter['valve_status'] == true)) {
+              // We use a small delay to avoid calling update during build
+              Future.microtask(() => _toggleValve(false));
+            }
             
             _cacheData(credit, valveOpen, flowRate);
           } else {
@@ -1136,31 +1160,48 @@ class _DashboardPageState extends State<DashboardPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
+        color: Colors.red.withOpacity(0.15),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.red.withOpacity(0.5), width: 2),
+        border: Border.all(color: Colors.red.withAlpha(128), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 5,
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 40),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'GAS LEAK DETECTED',
+                  'CRITICAL: LEAK DETECTED',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.red,
+                    letterSpacing: 0.5,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  'Valve has been automatically closed for your safety.',
+                  'Valve has been automatically closed to prevent hazards. Please check your appliance.',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: isDark ? Colors.red[200] : Colors.red[800],
+                    height: 1.4,
                   ),
                 ),
               ],
@@ -2273,42 +2314,89 @@ class AIChatPage extends StatefulWidget {
 
 class _AIChatPageState extends State<AIChatPage> {
   final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
   bool _loading = false;
 
-  final String groqKey = AppConfig.groqApiKey;
   String? meterId;
   bool _isLoadingMeterId = true;
+
+  // Multi-session management
+  List<Map<String, dynamic>> _sessions = [];
+  int _currentSessionIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserMeterId();
-    _loadChatHistory();
+    _loadAllSessions();
   }
 
-  Future<void> _loadChatHistory() async {
+  Future<void> _loadAllSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? storedChats = prefs.getString('chat_history');
-    if (storedChats != null) {
+    final String? storedSessions = prefs.getString('chat_sessions');
+    if (storedSessions != null) {
       try {
-        final List<dynamic> decoded = jsonDecode(storedChats);
+        final List<dynamic> decoded = jsonDecode(storedSessions);
         setState(() {
-          _messages.clear();
-          for (var item in decoded) {
-            _messages.add(Map<String, String>.from(item));
+          _sessions = decoded.map((s) => Map<String, dynamic>.from(s)).toList();
+          if (_sessions.isEmpty) {
+            _createNewSession();
           }
         });
       } catch (e) {
-        // Handle decode error silently
+        _createNewSession();
       }
+    } else {
+      _createNewSession();
     }
   }
 
-  Future<void> _saveChatHistory() async {
+  void _createNewSession() {
+    setState(() {
+      _sessions.insert(0, {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': 'New Chat',
+        'messages': <Map<String, String>>[],
+      });
+      _currentSessionIndex = 0;
+    });
+    _saveAllSessions();
+  }
+
+  void _deleteSession(int index) {
+    setState(() {
+      _sessions.removeAt(index);
+      if (_sessions.isEmpty) {
+        _createNewSession();
+      } else if (_currentSessionIndex >= _sessions.length) {
+        _currentSessionIndex = _sessions.length - 1;
+      } else if (_currentSessionIndex > index) {
+        _currentSessionIndex--;
+      }
+    });
+    _saveAllSessions();
+  }
+
+  Future<void> _saveAllSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_history', jsonEncode(_messages));
+    await prefs.setString('chat_sessions', jsonEncode(_sessions));
+  }
+
+  List<Map<String, String>> get _messages {
+    if (_sessions.isEmpty || _currentSessionIndex >= _sessions.length) return [];
+    final msgs = _sessions[_currentSessionIndex]['messages'] as List;
+    return msgs.map((m) => Map<String, String>.from(m)).toList();
+  }
+
+  set _messages(List<Map<String, String>> newMessages) {
+    if (_sessions.isNotEmpty) {
+      _sessions[_currentSessionIndex]['messages'] = newMessages;
+      // Auto-update title if it's the first message
+      if (newMessages.length == 1 && _sessions[_currentSessionIndex]['title'] == 'New Chat') {
+        String firstMsg = newMessages[0]['text'] ?? '';
+        _sessions[_currentSessionIndex]['title'] = firstMsg.length > 20 ? firstMsg.substring(0, 20) + '...' : firstMsg;
+      }
+    }
   }
 
   Future<void> _loadUserMeterId() async {
@@ -2344,20 +2432,24 @@ class _AIChatPageState extends State<AIChatPage> {
 
     // Check if meter ID is available
     if (meterId == null) {
+      final updatedMsgs = List<Map<String, String>>.from(_messages);
+      updatedMsgs.add({
+        'role': 'model',
+        'text': 'No meter assigned to your account. Please contact your administrator.'
+      });
       setState(() {
-        _messages.add({
-          'role': 'model',
-          'text': 'No meter assigned to your account. Please contact your administrator.'
-        });
+        _messages = updatedMsgs;
       });
       return;
     }
 
+    final initialMsgs = List<Map<String, String>>.from(_messages);
+    initialMsgs.add({'role': 'user', 'text': userMessage});
     setState(() {
-      _messages.add({'role': 'user', 'text': userMessage});
+      _messages = initialMsgs;
       _loading = true;
     });
-    _saveChatHistory(); // Save user message
+    _saveAllSessions(); 
     _controller.clear();
 
     double currentCredit = 80.0;
@@ -2391,19 +2483,41 @@ class _AIChatPageState extends State<AIChatPage> {
     final systemPrompt = '''
 You are FluxGuard AI,
 Current meter status:
-- Credit: \$$currentCredit
+- Credit: $currentCredit TZS
 - Valve: ${valveOpen ? 'OPEN' : 'CLOSED'}
 - Last Top-up: $lastTopUp
 - Active Alerts: $alertCount
 dont mention the creators name
 Be friendly, helpful, and accurate. Talk like a proud assistant.
+Read the credit remaining in tzs
+
+SPECIAL CAPABILITIES:
+1. If the user asks about food or recipes, you MUST provide:
+   - One food example at a time.
+   - Clear cooking steps.
+   - A descriptive image URL for the food (e.g., Use Unsplash: https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500 for general food). 
+   - ALWAYS format the image exactly as: [IMAGE: URL]
+2. If the user asks anything unrelated to your meter or cooking, tell them: "That’s an interesting query! However, my current function is to assist solely with your FluxGuard meter status, credit balance, cooking inspiration, and related alerts. How can I help you manage your service today?"
 ''';
 
-    try {
-      print('Debug: Sending request with key length: ${groqKey.length}');
-    print('Debug: Key starts with: ${groqKey.isNotEmpty ? groqKey.substring(0, 5) : "EMPTY"}');
+    final String groqKey = AppConfig.groqApiKey;
     
-    final response = await http.post(
+    // Check if key is empty
+    if (groqKey.isEmpty) {
+      final errMsgs = List<Map<String, String>>.from(_messages);
+      errMsgs.add({
+        'role': 'assistant', 
+        'text': 'API Key is missing. Please ensure GROQ_API_KEY is set in your .env file or passed via --dart-define.'
+      });
+      setState(() {
+        _messages = errMsgs;
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      final response = await http.post(
         Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
         headers: {
           'Authorization': 'Bearer $groqKey',
@@ -2413,7 +2527,10 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
           'model': 'llama-3.3-70b-versatile',
           'messages': [
             {'role': 'system', 'content': systemPrompt},
-            {'role': 'user', 'content': userMessage},
+            ..._messages.map((m) => {
+              'role': m['role'] == 'model' ? 'assistant' : m['role'],
+              'content': m['text']
+            }),
           ],
         }),
       );
@@ -2421,28 +2538,43 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final reply = data['choices'][0]['message']['content'];
+        final finalMsgs = List<Map<String, String>>.from(_messages);
+        finalMsgs.add({'role': 'assistant', 'text': reply});
         setState(() {
-          _messages.add({'role': 'model', 'text': reply});
+          _messages = finalMsgs;
           _loading = false;
         });
-        _saveChatHistory(); // Save AI response
+        _saveAllSessions(); 
       } else {
+        String errorMsg = 'Error ${response.statusCode}';
+        if (response.statusCode == 401) {
+          errorMsg = 'Error 401: Unauthorized. Please check your GROQ_API_KEY in .env or dart-define.';
+        }
+        final errMsgs = List<Map<String, String>>.from(_messages);
+        errMsgs.add({'role': 'assistant', 'text': errorMsg});
         setState(() {
-          _messages
-              .add({'role': 'model', 'text': 'Error ${response.statusCode}'});
+          _messages = errMsgs;
           _loading = false;
         });
       }
     } catch (e) {
+      final netMsgs = List<Map<String, String>>.from(_messages);
+      netMsgs.add({'role': 'assistant', 'text': 'Network error'});
       setState(() {
-        _messages.add({'role': 'model', 'text': 'Network error'});
+        _messages = netMsgs;
         _loading = false;
       });
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    // Scroll to bottom
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -2483,54 +2615,201 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-      appBar: AppBar(
-        title: Text('FluxGuard AI',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        foregroundColor: isDark ? Colors.white : Colors.indigo[900],
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {}, // Handled by Tab logic usually, but here for UI
+      drawer: Drawer(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.white,
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.indigo, Colors.indigo.shade900],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 48),
+                    const SizedBox(height: 12),
+                    Text(
+                      'AI Conversations',
+                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add, color: Colors.indigo),
+              title: const Text('New Conversation'),
+              onTap: () {
+                _createNewSession();
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            Expanded(
+              child: ShaderMask(
+                shaderCallback: (Rect bounds) {
+                  return LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black,
+                      Colors.black,
+                      Colors.transparent
+                    ],
+                    stops: const [0.0, 0.05, 0.95, 1.0],
+                  ).createShader(bounds);
+                },
+                blendMode: BlendMode.dstIn,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  itemCount: _sessions.length,
+                  itemBuilder: (context, index) {
+                    final session = _sessions[index];
+                    final isSelected = _currentSessionIndex == index;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: isSelected ? Colors.indigo.withOpacity(0.1) : Colors.transparent,
+                        boxShadow: isSelected ? [
+                          BoxShadow(
+                            color: Colors.indigo.withOpacity(0.1),
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          )
+                        ] : null,
+                      ),
+                      child: ListTile(
+                        leading: Icon(Icons.chat_bubble_outline, color: isSelected ? Colors.indigo : Colors.grey),
+                        title: Text(
+                          session['title'],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                          onPressed: () => _deleteSession(index),
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _currentSessionIndex = index;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: CustomScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                final isUser = msg['role'] == 'user';
-                return _buildMessageBubble(msg['text']!, isUser, isDark);
-              },
-            ),
-          ),
-          if (_loading)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, bottom: 20),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.indigo,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 200,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  leading: Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'AI is thinking...',
-                    style: GoogleFonts.inter(
-                        color: Colors.grey, fontStyle: FontStyle.italic),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [Colors.grey.shade900, const Color(0xFF101018)]
+                              : [Colors.grey.shade300, Colors.white],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.smart_toy_outlined,
+                                color: Colors.white, size: 32),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'FluxGuard AI',
+                            style: GoogleFonts.outfit(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final msg = _messages[index];
+                        final isUser = msg['role'] == 'user';
+                        return _buildMessageBubble(msg['text']!, isUser, isDark);
+                      },
+                      childCount: _messages.length,
+                    ),
+                  ),
+                ),
+                if (_loading)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 20, bottom: 20),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Analyzing your request...',
+                            style: GoogleFonts.inter(
+                                color: Colors.grey, fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
+          ),
           _buildInputArea(isDark),
         ],
       ),
@@ -2538,6 +2817,28 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
   }
 
   Widget _buildMessageBubble(String text, bool isUser, bool isDark) {
+    // Parse for image tags: [IMAGE: URL] or ![alt](url)
+    List<String> imageUrls = [];
+    String cleanText = text;
+    
+    // Match [IMAGE: URL] (case-insensitive)
+    final imageRegex = RegExp(r'\[IMAGE:\s*(.*?)\]', caseSensitive: false);
+    final imageMatches = imageRegex.allMatches(text);
+    for (final m in imageMatches) {
+      final url = m.group(1)?.trim();
+      if (url != null && url.isNotEmpty) imageUrls.add(url);
+    }
+    cleanText = cleanText.replaceAll(imageRegex, '');
+
+    // Match ![alt](url)
+    final mdRegex = RegExp(r'!\[.*?\]\((.*?)\)');
+    final mdMatches = mdRegex.allMatches(cleanText);
+    for (final m in mdMatches) {
+      final url = m.group(1)?.trim();
+      if (url != null && url.isNotEmpty) imageUrls.add(url);
+    }
+    cleanText = cleanText.replaceAll(mdRegex, '').trim();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -2548,56 +2849,89 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.indigo.withOpacity(0.1),
+                color: Colors.grey.withOpacity(0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.indigo.withOpacity(0.2)),
+                border: Border.all(color: Colors.grey.withOpacity(0.2)),
               ),
-              child: const Icon(Icons.smart_toy, size: 20, color: Colors.indigo),
+              child: const Icon(Icons.smart_toy_outlined, size: 20, color: Colors.grey),
             ),
             const SizedBox(width: 12),
           ],
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: isUser
-                    ? const LinearGradient(
-                  colors: [Colors.indigo, Colors.blueAccent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-                    : null,
-                color: isUser
-                    ? null
-                    : (isDark ? const Color(0xFF2C3246) : Colors.white),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+            child: Column(
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (imageUrls.isNotEmpty)
+                  ...imageUrls.map((url) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 300),
+                        child: Image.network(
+                          url,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(maxWidth: 300, minHeight: 150),
+                            color: Colors.grey.withOpacity(0.1),
+                            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )),
+                if (cleanText.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: isUser
+                          ? const LinearGradient(
+                        colors: [Colors.indigo, Colors.blueAccent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                          : LinearGradient(
+                        colors: isDark
+                            ? [const Color(0xFF1E2336), const Color(0xFF141824)]
+                            : [Colors.white, Colors.grey.shade50],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(20),
+                        topRight: const Radius.circular(20),
+                        bottomLeft: Radius.circular(isUser ? 20 : 4),
+                        bottomRight: Radius.circular(isUser ? 4 : 20),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isUser 
+                              ? Colors.indigo.withOpacity(0.2) 
+                              : Colors.grey.withOpacity(isDark ? 0.3 : 0.1),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: isUser
+                          ? null
+                          : Border.all(
+                          color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
+                    ),
+                    child: Text(
+                      cleanText,
+                      style: GoogleFonts.inter(
+                        color: isUser
+                            ? Colors.white
+                            : (isDark ? Colors.white : Colors.black87),
+                        fontSize: 15,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
-                ],
-                border: isUser
-                    ? null
-                    : Border.all(
-                    color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
-              ),
-              child: Text(
-                text,
-                style: GoogleFonts.inter(
-                  color: isUser
-                      ? Colors.white
-                      : (isDark ? Colors.white : Colors.black87),
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
+              ],
             ),
           ),
           if (isUser) ...[
@@ -2609,7 +2943,7 @@ Be friendly, helpful, and accurate. Talk like a proud assistant.
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.blue.withOpacity(0.2)),
               ),
-              child: const Icon(Icons.person, size: 20, color: Colors.blue),
+              child: const Icon(Icons.person_outline, size: 20, color: Colors.blue),
             ),
           ],
         ],
