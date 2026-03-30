@@ -8,41 +8,59 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui'; // For BackdropFilter
 import 'services/meter_service.dart';
+import 'services/connectivity_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:vibration/vibration.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:crypto/crypto.dart';
 
 class AppConfig {
   static String get groqApiKey {
     // Check .env first as it's more reliable in this setup
     final envKey = dotenv.env['GROQ_API_KEY'];
     if (envKey != null && envKey.isNotEmpty) return envKey.trim();
-    
+
     // Fallback to dart-define
     const cliKey = String.fromEnvironment('GROQ_API_KEY');
     return cliKey.trim();
   }
 }
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  final key = dotenv.env['GROQ_API_KEY'];
-  print('DEBUG: GROQ_API_KEY loaded: ${key != null && key.isNotEmpty ? "YES (First 5: ${key.substring(0, 5)}...)" : "NO"}');
 
-  await Supabase.initialize(
-    url: 'https://hugqwdfledpcsbupoagc.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-    ),
-  );
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('DEBUG: .env load failed: $e');
+  }
+
+  final key = dotenv.env['GROQ_API_KEY'];
+  print(
+      'DEBUG: GROQ_API_KEY loaded: ${key != null && key.isNotEmpty ? "YES (First 5: ${key.substring(0, 5)}...)" : "NO"}');
+
+  try {
+    await Supabase.initialize(
+      url: 'https://hugqwdfledpcsbupoagc.supabase.co',
+      anonKey:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1Z3F3ZGZsZWRwY3NidXBvYWdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MTcyMzIsImV4cCI6MjA4MDQ5MzIzMn0.ZWdUiYZaRLa0HZvzGVl2SBSkgkzBUrYXMjknp7rWYRM',
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+      ),
+    );
+  } catch (e) {
+    debugPrint('DEBUG: Supabase initialization failed: $e');
+    // We continue even if init fails to allow the app to boot into offline-capable screens
+  }
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppTheme(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppTheme()),
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
+      ],
       child: const FluxGuardApp(),
     ),
   );
@@ -106,13 +124,35 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkSession() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null && mounted) {
-      // Use addPostFrameCallback to navigate after build is complete
+    final prefs = await SharedPreferences.getInstance();
+    final hasCachedMeter = prefs.getString('offline_meter_id') != null;
+    
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null && mounted) {
+        // Use addPostFrameCallback to navigate after build is complete
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+            );
+          }
+        });
+        return;
+      }
+    } catch (e) {
+      debugPrint('DEBUG: Session check failed (most likely offline): $e');
+    }
+
+    // Fallback for offline mode: if we have cached data, we can proceed to HomeScreen
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((r) => r == ConnectivityResult.none);
+    
+    if (isOffline && hasCachedMeter && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            MaterialPageRoute(builder: (_) => const HomeScreen(isOffline: true)),
           );
         }
       });
@@ -144,23 +184,106 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  String _hashPassword(String password) {
+    var bytes = utf8.encode(password);
+    var digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
   Future<void> login() async {
     setState(() => loading = true);
+    final email = emailCtrl.text.trim();
+    final password = passCtrl.text;
+
     try {
-      await Supabase.instance.client.auth.signInWithPassword(
-        email: emailCtrl.text.trim(),
-        password: passCtrl.text,
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
       );
+
+      // On successful login, cache credentials and user info
+      if (response.user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_email', email);
+        await prefs.setString('offline_pass_hash', _hashPassword(password));
+
+        // Cache role and meter_id for later use
+        try {
+          final profile = await Supabase.instance.client
+              .from('profiles')
+              .select('role, meter_id')
+              .eq('id', response.user!.id)
+              .single();
+
+          await prefs.setString('offline_role', profile['role'] ?? 'user');
+          if (profile['meter_id'] != null) {
+            await prefs.setString('offline_meter_id', profile['meter_id']);
+          }
+        } catch (e) {
+          debugPrint('Failed to cache profile info: $e');
+        }
+      }
+
       if (mounted) {
         Navigator.pushReplacement(
             context, MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Login failed: $e'), backgroundColor: Colors.red),
-        );
+      debugPrint('DEBUG: Login error type: ${e.runtimeType}, error: $e');
+
+      // Broader check for network errors or specific Supabase offline states
+      bool isOffline = e is AuthException &&
+          (e.statusCode == '0' ||
+              e.message.contains('connection') ||
+              e.message.contains('Failed host lookup'));
+
+      if (!isOffline) {
+        // Check for common socket/http errors that might not be AuthException
+        final errString = e.toString().toLowerCase();
+        isOffline = errString.contains('socketexception') ||
+            errString.contains('failed host lookup') ||
+            errString.contains('connection') ||
+            errString.contains('network');
+      }
+
+      if (isOffline) {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedEmail = prefs.getString('offline_email');
+        final cachedHash = prefs.getString('offline_pass_hash');
+
+        if (cachedEmail == email && cachedHash == _hashPassword(password)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Offline Mode: Using cached credentials'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const HomeScreen(isOffline: true)));
+          }
+          return;
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'No cached credentials for this user or wrong password'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Login failed: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
     }
     if (mounted) setState(() => loading = false);
@@ -334,7 +457,8 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isOffline;
+  const HomeScreen({super.key, this.isOffline = false});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -353,25 +477,40 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchUserRole() async {
+    if (widget.isOffline) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _userRole = prefs.getString('offline_role') ?? 'user';
+        _isLoadingRole = false;
+      });
+      return;
+    }
+
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
-      
+
       if (userId != null) {
         final response = await supabase
             .from('profiles')
             .select('role')
             .eq('id', userId)
             .single();
-        
+
+        final role = response['role'] ?? 'user';
         setState(() {
-          _userRole = response['role'] ?? 'user';
+          _userRole = role;
           _isLoadingRole = false;
         });
+
+        // Cache role for offline use
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_role', role);
       }
     } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
       setState(() {
-        _userRole = 'user';
+        _userRole = prefs.getString('offline_role') ?? 'user';
         _isLoadingRole = false;
       });
     }
@@ -385,8 +524,32 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _adminTabIndex = index);
   }
 
+  Widget _buildOfflineBanner() {
+    return Container(
+      width: double.infinity,
+      color: Colors.orange[900],
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      alignment: Alignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off, color: Colors.white, size: 14),
+          const SizedBox(width: 8),
+          Text(
+            'Offline Mode - Using Cached Data',
+            style: GoogleFonts.inter(
+                color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final connectivity = Provider.of<ConnectivityService>(context);
+    final isOffline = connectivity.isOffline;
+
     if (_isLoadingRole) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -404,10 +567,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return Scaffold(
         appBar: AppBar(
-          title: Text('FluxGuard Admin',
+          title: Text(
+              isOffline
+                  ? 'FluxGuard Admin (Offline)'
+                  : 'FluxGuard Admin',
               style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.indigo[900],
+          backgroundColor:
+              isOffline ? Colors.orange[900] : Colors.indigo[900],
           foregroundColor: Colors.white,
+          bottom: isOffline
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(24),
+                  child: _buildOfflineBanner(),
+                )
+              : null,
         ),
         body: adminPages[_adminTabIndex],
         bottomNavigationBar: BottomNavigationBar(
@@ -430,12 +603,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Regular user navigation
     final List<Widget> pages = [
-      const DashboardPage(),
-      const ReportsPage(),
-      const AlertsPage(),
-      const TopUpPage(),
-      const AIChatPage(),
-      const SettingsPage(),
+      DashboardPage(isOffline: isOffline),
+      ReportsPage(isOffline: isOffline),
+      AlertsPage(isOffline: isOffline),
+      TopUpPage(isOffline: isOffline),
+      AIChatPage(isOffline: isOffline),
+      SettingsPage(isOffline: isOffline),
     ];
 
     final List<BottomNavigationBarItem> navItems = [
@@ -445,7 +618,8 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icon(Icons.bar_chart), label: 'Reports'),
       const BottomNavigationBarItem(
           icon: Icon(Icons.notifications), label: 'Alerts'),
-      const BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Top-Ups'),
+      const BottomNavigationBarItem(
+          icon: Icon(Icons.payment), label: 'Top-Ups'),
       const BottomNavigationBarItem(
           icon: Icon(Icons.smart_toy), label: 'AI Chat'),
       const BottomNavigationBarItem(
@@ -453,6 +627,12 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
+      appBar: isOffline
+          ? PreferredSize(
+              preferredSize: const Size.fromHeight(24),
+              child: SafeArea(child: _buildOfflineBanner()),
+            )
+          : null,
       body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -466,7 +646,8 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final bool isOffline;
+  const DashboardPage({super.key, this.isOffline = false});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -477,6 +658,10 @@ class _DashboardPageState extends State<DashboardPage> {
   bool? _localValveStatus; // Local override for immediate UI update
   bool _isLoadingMeterId = true;
   MeterService? _meterService; // Service to handle credit reduction
+  DateTime? _lastVibrationTime; // To throttle leakage alerts
+  ConnectivityService? _connectivityService; // To watch for online/offline transitions
+  final AudioPlayer _audioPlayer = AudioPlayer(); // For sound alerts
+  bool _isSimulatingLeak = false; // For development/testing
 
   @override
   void initState() {
@@ -487,10 +672,60 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _meterService?.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cs = Provider.of<ConnectivityService>(context);
+    if (_connectivityService != null && 
+        _connectivityService!.isOffline && 
+        cs.isOnline) {
+      // Transitioned from offline to online - trigger sync
+      _syncPendingChanges();
+    }
+    _connectivityService = cs;
+  }
+
+  Future<void> _syncPendingChanges() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pendingValve = prefs.getBool('pending_valve_sync');
+    if (pendingValve != null && meterId != null) {
+      debugPrint('Syncing pending valve status: $pendingValve');
+      try {
+        await Supabase.instance.client
+            .from('meters')
+            .update({'valve_status': pendingValve}).eq('id', meterId!);
+        await prefs.remove('pending_valve_sync');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offline changes synchronized'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Sync failed: $e');
+      }
+    }
+  }
+
   Future<void> _loadUserMeterId() async {
+    if (widget.isOffline) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        meterId = prefs.getString('offline_meter_id');
+        _isLoadingMeterId = false;
+        if (meterId != null) {
+          _meterService = MeterService(meterId!);
+        }
+      });
+      return;
+    }
+
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -500,35 +735,49 @@ class _DashboardPageState extends State<DashboardPage> {
             .select('meter_id')
             .eq('id', userId)
             .single();
-        
+
+        final mId = profile['meter_id'];
         setState(() {
-          meterId = profile['meter_id'];
+          meterId = mId;
           _isLoadingMeterId = false;
-          
+
           // Initialize MeterService when meter ID is available
           if (meterId != null) {
             _meterService = MeterService(meterId!);
             debugPrint('MeterService initialized for meter: $meterId');
           }
         });
+
+        // Cache meter_id
+        if (mId != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('offline_meter_id', mId);
+        }
       } else {
         setState(() {
           _isLoadingMeterId = false;
         });
       }
     } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
       setState(() {
+        meterId = prefs.getString('offline_meter_id');
         _isLoadingMeterId = false;
+        if (meterId != null) {
+          _meterService = MeterService(meterId!);
+        }
       });
     }
   }
 
-  Future<void> _cacheData(
-      double credit, bool valveOpen, double flowRate) async {
+  Future<void> _cacheData(double credit, bool valveOpen, double flowRate,
+      double totalVolume, double velocity) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('cached_credit', credit);
     await prefs.setBool('cached_valve', valveOpen);
     await prefs.setDouble('cached_flow', flowRate);
+    await prefs.setDouble('cached_total_volume', totalVolume);
+    await prefs.setDouble('cached_velocity', velocity);
   }
 
   Future<void> _toggleValve(bool newStatus) async {
@@ -545,7 +794,8 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             backgroundColor: Colors.orange,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(16),
           ),
         );
@@ -557,35 +807,63 @@ class _DashboardPageState extends State<DashboardPage> {
       _localValveStatus = newStatus;
     });
 
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('cached_valve', newStatus);
+
+    if (widget.isOffline || (Provider.of<ConnectivityService>(context, listen: false).isOffline)) {
+      // Offline mode: save for later sync
+      await prefs.setBool('pending_valve_sync', newStatus);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newStatus 
+                  ? 'Valve Open (Offline - will sync later)' 
+                  : 'Valve Closed (Offline - will sync later)',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       await supabase
           .from('meters')
           .update({'valve_status': newStatus}).eq('id', meterId!);
+      
+      // Clear pending sync if we just successfully updated
+      await prefs.remove('pending_valve_sync');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              newStatus ? 'Valve Opened Successfully' : 'Valve Closed Successfully',
+              newStatus
+                  ? 'Valve Opened Successfully'
+                  : 'Valve Closed Successfully',
               style: GoogleFonts.inter(fontWeight: FontWeight.bold),
             ),
             backgroundColor: newStatus ? Colors.green : Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             margin: const EdgeInsets.all(16),
           ),
         );
       }
     } catch (e) {
-      setState(() {
-        _localValveStatus = null;
-      });
-
+      // If error (e.g. timeout), treat as pending sync
+      await prefs.setBool('pending_valve_sync', newStatus);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Saved locally: $e'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
@@ -596,17 +874,16 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Function to reset gas usage
     Future<void> _resetGasUsage() async {
       if (meterId == null) return;
-      
+
       try {
         await supabase
             .from('meters')
-            .update({'total_volume': 0.0})
-            .eq('id', meterId!);
-        
+            .update({'total_volume': 0.0}).eq('id', meterId!);
+
         // Show confirmation
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -620,11 +897,52 @@ class _DashboardPageState extends State<DashboardPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to reset gas usage: \$e'),
+              content: Text('Failed to reset gas usage: $e'),
               backgroundColor: Colors.red,
             ),
           );
         }
+      }
+    }
+
+    void _testAlert() {
+      Vibration.hasVibrator().then((hasVibrator) {
+        if (hasVibrator == true) {
+          Vibration.vibrate(pattern: [500, 500, 500]);
+        }
+      });
+      _audioPlayer.play(UrlSource('https://www.soundjay.com/buttons/beep-01a.mp3'));
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Testing alert (Vibration & Sound)...')),
+        );
+      }
+    }
+
+    Future<void> _simulateLeak() async {
+      setState(() {
+        _isSimulatingLeak = !_isSimulatingLeak;
+      });
+      
+      if (meterId != null && !widget.isOffline) {
+         try {
+           await supabase
+               .from('meters')
+               .update({'gas_leak': _isSimulatingLeak})
+               .eq('id', meterId!);
+         } catch (e) {
+           debugPrint('Simulate leak update failed: $e');
+         }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isSimulatingLeak ? 'Leak simulation started!' : 'Leak simulation stopped'),
+            backgroundColor: _isSimulatingLeak ? Colors.red : Colors.green,
+          ),
+        );
       }
     }
 
@@ -708,312 +1026,404 @@ class _DashboardPageState extends State<DashboardPage> {
 
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             final meter = snapshot.data![0];
-            credit = double.tryParse(meter['current_credit']?.toString() ?? '80.0') ?? 80.0;
+            credit = double.tryParse(
+                    meter['current_credit']?.toString() ?? '80.0') ??
+                80.0;
             valveOpen = _localValveStatus ?? (meter['valve_status'] == true);
-            flowRate = double.tryParse(meter['current_reading']?.toString() ?? '0.0') ?? 0.0;
-            totalVolume = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
-            velocity = double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
+            flowRate = double.tryParse(
+                    meter['current_reading']?.toString() ?? '0.0') ??
+                0.0;
+            totalVolume =
+                double.tryParse(meter['total_volume']?.toString() ?? '0') ??
+                    0.0;
+            velocity =
+                double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
             leakDetected = meter['gas_leak'] == true && flowRate > 0.0;
 
-            // Auto-close valve logic
-            if (leakDetected && (meter['valve_status'] == true)) {
-              // We use a small delay to avoid calling update during build
-              Future.microtask(() => _toggleValve(false));
+            if (leakDetected) {
+              // Trigger vibration if leak detected, with 5 second cooldown
+              final now = DateTime.now();
+              if (_lastVibrationTime == null ||
+                  now.difference(_lastVibrationTime!).inSeconds > 5) {
+                _lastVibrationTime = now;
+                Vibration.hasVibrator().then((hasVibrator) {
+                  if (hasVibrator == true) {
+                    Vibration.vibrate(pattern: [500, 1000, 500, 1000]);
+                  }
+                });
+                // Play sound alert
+                _audioPlayer.play(UrlSource('https://www.soundjay.com/buttons/beep-01a.mp3'));
+              }
             }
-            
-            _cacheData(credit, valveOpen, flowRate);
-          } else {
+
+            _cacheData(credit, valveOpen, flowRate, totalVolume, velocity);
+          } else if (widget.isOffline || snapshot.hasError) {
             isOffline = true;
-            SharedPreferences.getInstance().then((prefs) {
-              credit = prefs.getDouble('cached_credit') ?? 80.0;
-              valveOpen = prefs.getBool('cached_valve') ?? true;
-              flowRate = prefs.getDouble('cached_flow') ?? 0.0;
-            });
+          } else {
+            isOffline = snapshot.connectionState == ConnectionState.waiting;
           }
 
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                expandedHeight: 120,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    alignment: Alignment.bottomLeft,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Welcome Back,',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
-                        ),
-                        Text(
-                          'Dashboard',
-                          style: GoogleFonts.outfit(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.indigo[900],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        // Leak Detection Alert
-                        if (leakDetected)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: _buildLeakAlert(isDark),
-                          ),
+          // In both cases (real offline or loading), try to load from cache as fallback
+          return FutureBuilder<SharedPreferences>(
+            future: SharedPreferences.getInstance(),
+            builder: (context, prefsSnapshot) {
+              if (prefsSnapshot.hasData &&
+                  (isOffline || !snapshot.hasData || snapshot.hasError)) {
+                final prefs = prefsSnapshot.data!;
+                credit = prefs.getDouble('cached_credit') ?? credit;
+                valveOpen = _localValveStatus ??
+                    prefs.getBool('cached_valve') ??
+                    valveOpen;
+                flowRate = prefs.getDouble('cached_flow') ?? flowRate;
+                totalVolume =
+                    prefs.getDouble('cached_total_volume') ?? totalVolume;
+                velocity = prefs.getDouble('cached_velocity') ?? velocity;
+                isOffline = true; // Force offline UI if using cache
+              }
 
-                        // Credit Card
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 600),
-                        curve: Curves.easeOutBack,
-                        builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: _buildCreditCard(credit, isOffline, isDark),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Valve Control
-                      Text(
-                        'Valve Control',
-                        style: GoogleFonts.outfit(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildValveButton(
-                              title: 'OPEN VALVE',
-                              isActive: valveOpen,
-                              isOpening: true,
-                              onTap: () => _toggleValve(true),
+              return CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    expandedHeight: 120,
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                        alignment: Alignment.bottomLeft,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome Back,',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildValveButton(
-                              title: 'CLOSE VALVE',
-                              isActive: !valveOpen,
-                              isOpening: false,
-                              onTap: () => _toggleValve(false),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Gas Flow Gauge
-                      Text(
-                        'Real-time Flow Rate',
-                        style: GoogleFonts.outfit(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        height: 280,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
+                            Text(
+                              'Dashboard',
+                              style: GoogleFonts.outfit(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isDark ? Colors.white : Colors.indigo[900],
+                              ),
                             ),
                           ],
                         ),
-                        child: SfRadialGauge(
-                          axes: <RadialAxis>[
-                            RadialAxis(
-                              minimum: 0,
-                              maximum: 5, // Velocity in m/s
-                              startAngle: 180,
-                              endAngle: 0,
-                              showLabels: false,
-                              showTicks: false,
-                              axisLineStyle: AxisLineStyle(
-                                thickness: 0.2,
-                                thicknessUnit: GaugeSizeUnit.factor,
-                                cornerStyle: CornerStyle.bothCurve,
-                                color: isDark ? Colors.grey[800] : Colors.grey[100],
-                              ),
-                              pointers: <GaugePointer>[
-                                RangePointer(
-                                  value: velocity,
-                                  width: 0.2,
-                                  sizeUnit: GaugeSizeUnit.factor,
-                                  cornerStyle: CornerStyle.bothCurve,
-                                  gradient: const SweepGradient(
-                                    colors: [Colors.orange, Colors.red],
-                                    stops: [0.0, 1.0],
-                                  ),
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          // Leak Detection Alert
+                          if (leakDetected)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 24),
+                              child: _buildLeakAlert(isDark),
+                            ),
+
+                          // Credit Card
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.easeOutBack,
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: value,
+                                child:
+                                    _buildCreditCard(credit, isOffline, isDark),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Valve Control
+                          Text(
+                            'Valve Control',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildValveButton(
+                                  title: 'OPEN VALVE',
+                                  isActive: valveOpen,
+                                  isOpening: true,
+                                  onTap: () => _toggleValve(true),
                                 ),
-                                MarkerPointer(
-                                  value: velocity,
-                                  markerType: MarkerType.circle,
-                                  color: Colors.white,
-                                  markerHeight: 16,
-                                  markerWidth: 16,
-                                  borderWidth: 4,
-                                  borderColor: Colors.red,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _buildValveButton(
+                                  title: 'CLOSE VALVE',
+                                  isActive: !valveOpen,
+                                  isOpening: false,
+                                  onTap: () => _toggleValve(false),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Gas Flow Gauge
+                          Text(
+                            'Real-time Flow Rate',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            height: 280,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2336)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(32),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 4),
                                 ),
                               ],
-                              annotations: <GaugeAnnotation>[
-                                GaugeAnnotation(
-                                  widget: Column(
-                                    mainAxisSize: MainAxisSize.min,
+                            ),
+                            child: SfRadialGauge(
+                              axes: <RadialAxis>[
+                                RadialAxis(
+                                  minimum: 0,
+                                  maximum: 5, // Velocity in m/s
+                                  startAngle: 180,
+                                  endAngle: 0,
+                                  showLabels: false,
+                                  showTicks: false,
+                                  axisLineStyle: AxisLineStyle(
+                                    thickness: 0.2,
+                                    thicknessUnit: GaugeSizeUnit.factor,
+                                    cornerStyle: CornerStyle.bothCurve,
+                                    color: isDark
+                                        ? Colors.grey[800]
+                                        : Colors.grey[100],
+                                  ),
+                                  pointers: <GaugePointer>[
+                                    RangePointer(
+                                      value: velocity,
+                                      width: 0.2,
+                                      sizeUnit: GaugeSizeUnit.factor,
+                                      cornerStyle: CornerStyle.bothCurve,
+                                      gradient: const SweepGradient(
+                                        colors: [Colors.orange, Colors.red],
+                                        stops: [0.0, 1.0],
+                                      ),
+                                    ),
+                                    MarkerPointer(
+                                      value: velocity,
+                                      markerType: MarkerType.circle,
+                                      color: Colors.white,
+                                      markerHeight: 16,
+                                      markerWidth: 16,
+                                      borderWidth: 4,
+                                      borderColor: Colors.red,
+                                    ),
+                                  ],
+                                  annotations: <GaugeAnnotation>[
+                                    GaugeAnnotation(
+                                      widget: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            velocity.toStringAsFixed(2),
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 48,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                          Text(
+                                            'm/s Velocity',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
+                                              color: isDark
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      angle: 90,
+                                      positionFactor: 0.1,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Total Volume Card
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2336)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(32),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.gas_meter,
+                                      color: Colors.orange, size: 32),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        velocity.toStringAsFixed(2),
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 48,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark ? Colors.white : Colors.black,
+                                        'Total Gas Amount',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600],
                                         ),
                                       ),
                                       Text(
-                                        'm/s Velocity',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        '${totalVolume.toStringAsFixed(2)} Liters',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  angle: 90,
-                                  positionFactor: 0.1,
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Total Volume Card
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.gas_meter, color: Colors.orange, size: 32),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Total Gas Amount',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                    ),
-                                  ),
-                                  Text(
-                                    '${totalVolume.toStringAsFixed(2)} Liters',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.white : Colors.black,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                                            
-                      const SizedBox(height: 16),
-                                            
-                      // Reset Gas Usage Button
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _resetGasUsage,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.redAccent,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Reset Gas Usage to Zero',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Testing & Simulation Controls
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _testAlert,
+                                  icon: const Icon(Icons.notifications_active),
+                                  label: const Text('Test Alert'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueGrey,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                   ),
                                 ),
                               ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _simulateLeak,
+                                  icon: Icon(_isSimulatingLeak ? Icons.stop : Icons.play_arrow),
+                                  label: Text(_isSimulatingLeak ? 'Stop Leak' : 'Simulate Leak'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _isSimulatingLeak ? Colors.red : Colors.orange,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Reset Gas Usage Button
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF1E2336)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: _resetGasUsage,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.redAccent,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Reset Gas Usage to Zero',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 100), // Bottom padding
+                        ],
                       ),
-                      const SizedBox(height: 100), // Bottom padding
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           );
         },
       ),
@@ -1035,7 +1445,7 @@ class _DashboardPageState extends State<DashboardPage> {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.indigo.withOpacity(0.3),
+            color: Colors.indigo.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -1048,16 +1458,18 @@ class _DashboardPageState extends State<DashboardPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       isOffline ? Icons.wifi_off : Icons.wifi,
-                      color: isOffline ? Colors.orangeAccent : Colors.greenAccent,
+                      color:
+                          isOffline ? Colors.orangeAccent : Colors.greenAccent,
                       size: 16,
                     ),
                     const SizedBox(width: 8),
@@ -1072,14 +1484,14 @@ class _DashboardPageState extends State<DashboardPage> {
                   ],
                 ),
               ),
-              Icon(Icons.nfc, color: Colors.white.withOpacity(0.5), size: 32),
+              Icon(Icons.nfc, color: Colors.white.withValues(alpha: 0.5), size: 32),
             ],
           ),
           const SizedBox(height: 32),
           Text(
             'Available Credit',
             style: GoogleFonts.inter(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withValues(alpha: 0.7),
               fontSize: 16,
             ),
           ),
@@ -1117,16 +1529,19 @@ class _DashboardPageState extends State<DashboardPage> {
           gradient: isActive
               ? LinearGradient(colors: bgGradient)
               : LinearGradient(
-                  colors: [Colors.grey.withOpacity(0.1), Colors.grey.withOpacity(0.05)],
+                  colors: [
+                    Colors.grey.withValues(alpha: 0.1),
+                    Colors.grey.withValues(alpha: 0.05)
+                  ],
                 ),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isActive ? Colors.transparent : Colors.grey.withOpacity(0.2),
+            color: isActive ? Colors.transparent : Colors.grey.withValues(alpha: 0.2),
           ),
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.4),
+                    color: activeColor.withValues(alpha: 0.4),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -1160,12 +1575,12 @@ class _DashboardPageState extends State<DashboardPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.15),
+        color: Colors.red.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.red.withAlpha(128), width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 20,
             spreadRadius: 5,
           ),
@@ -1176,10 +1591,11 @@ class _DashboardPageState extends State<DashboardPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.2),
+              color: Colors.red.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 32),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: Colors.red, size: 32),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -1214,7 +1630,8 @@ class _DashboardPageState extends State<DashboardPage> {
 }
 
 class ReportsPage extends StatefulWidget {
-  const ReportsPage({super.key});
+  final bool isOffline;
+  const ReportsPage({super.key, this.isOffline = false});
 
   @override
   State<ReportsPage> createState() => _ReportsPageState();
@@ -1236,6 +1653,18 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Future<void> _loadUserMeterId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (widget.isOffline) {
+      if (mounted) {
+        setState(() {
+          meterId = prefs.getString('offline_meter_id');
+          _isLoadingMeterId = false;
+        });
+      }
+      return;
+    }
+
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -1245,25 +1674,34 @@ class _ReportsPageState extends State<ReportsPage> {
             .select('meter_id')
             .eq('id', userId)
             .single();
-        
-        setState(() {
-          meterId = profile['meter_id'];
-          _isLoadingMeterId = false;
-        });
+
+        final mId = profile['meter_id'];
+        if (mounted) {
+          setState(() {
+            meterId = mId;
+            _isLoadingMeterId = false;
+          });
+        }
+
+        if (mId != null) {
+          await prefs.setString('offline_meter_id', mId);
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingMeterId = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
+          meterId = prefs.getString('offline_meter_id');
           _isLoadingMeterId = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _isLoadingMeterId = false;
-      });
     }
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -1271,7 +1709,7 @@ class _ReportsPageState extends State<ReportsPage> {
     final currentData = [50.0, 70.0, 60.0, 80.0, 90.0, 75.0];
     final futureData = currentData.map((e) => e * 1.1).toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Show loading indicator while fetching meter ID
     if (_isLoadingMeterId) {
       return Scaffold(
@@ -1343,361 +1781,402 @@ class _ReportsPageState extends State<ReportsPage> {
             .stream(primaryKey: ['id']).eq('id', meterId!),
         builder: (context, snapshot) {
           double totalVolume = 0.0;
-          
+
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             final meter = snapshot.data![0];
-            totalVolume = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
+            totalVolume =
+                double.tryParse(meter['total_volume']?.toString() ?? '0') ??
+                    0.0;
+            // Cache for offline
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setDouble('cached_total_volume', totalVolume);
+              // In a real app, we would cache more granular usage data here
+            });
+          } else if (widget.isOffline || snapshot.hasError) {
+             // Fallback to cache handled in FutureBuilder below
           }
-          
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 48), // Padding for top status bar area
-                
-                // Total Usage Since Purchase Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E2336) : Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Total Usage Since Purchase',
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.indigo[900],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(Icons.local_gas_station, color: Colors.orange, size: 32),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Total Gas Consumed',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  '${totalVolume.toStringAsFixed(2)} Liters',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
+
+          return FutureBuilder<SharedPreferences>(
+            future: SharedPreferences.getInstance(),
+            builder: (context, prefsSnapshot) {
+              if (prefsSnapshot.hasData &&
+                  (snapshot.hasError || !snapshot.hasData)) {
+                totalVolume =
+                    prefsSnapshot.data!.getDouble('cached_total_volume') ??
+                        totalVolume;
+              }
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(
+                        height: 48), // Padding for top status bar area
+
+                    // Total Usage Since Purchase Card
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.easeOut,
-                  builder: (context, value, child) {
-                    return Opacity(
-                      opacity: value,
-                      child: Transform.translate(
-                        offset: Offset(0, 20 * (1 - value)),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Usage Insights',
-                          style: GoogleFonts.outfit(
-                              fontSize: 32,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Total Usage Since Purchase',
+                            style: GoogleFonts.outfit(
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.indigo[900])),
-                      Text('Track your gas consumption over time',
-                          style: GoogleFonts.inter(
-                              fontSize: 16,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-            
-            // Current Usage Chart (Line Chart)
-            _buildChartSection(
-              title: 'Current Usage Trend',
-              subtitle: 'Last 6 Months',
-              isDark: isDark,
-              delay: 200,
-              child: SizedBox(
-                height: 300,
-                child: _showChart
-                    ? LineChart(
-                        LineChartData(
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            horizontalInterval: 20,
-                            getDrawingHorizontalLine: (value) {
-                              return FlLine(
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.05)
-                                    : Colors.indigo.withOpacity(0.05),
-                                strokeWidth: 1,
-                              );
-                            },
+                              color: isDark ? Colors.white : Colors.indigo[900],
+                            ),
                           ),
-                          titlesData: FlTitlesData(
-                            show: true,
-                            rightTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            topTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 30,
-                                interval: 1,
-                                getTitlesWidget: (value, meta) {
-                                  const titles = [
-                                    'Jan',
-                                    'Feb',
-                                    'Mar',
-                                    'Apr',
-                                    'May',
-                                    'Jun'
-                                  ];
-                                  if (value.toInt() >= 0 &&
-                                      value.toInt() < titles.length) {
-                                    return SideTitleWidget(
-                                      meta: meta,
-                                      child: Text(
-                                        titles[value.toInt()],
-                                        style: GoogleFonts.inter(
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(Icons.local_gas_station,
+                                    color: Colors.orange, size: 32),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Total Gas Consumed',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        color: isDark
+                                            ? Colors.grey[400]
+                                            : Colors.grey[600],
                                       ),
-                                    );
-                                  }
-                                  return const SizedBox();
-                                },
-                              ),
-                            ),
-                            leftTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          minX: 0,
-                          maxX: 5,
-                          minY: 0,
-                          maxY: 100,
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: currentData
-                                  .asMap()
-                                  .entries
-                                  .map((e) => FlSpot(
-                                      e.key.toDouble(), e.value))
-                                  .toList(),
-                              isCurved: true,
-                              gradient: const LinearGradient(
-                                colors: [Colors.cyanAccent, Colors.blueAccent],
-                              ),
-                              barWidth: 4,
-                              isStrokeCapRound: true,
-                              dotData: FlDotData(
-                                show: true,
-                                getDotPainter: (spot, percent, barData, index) {
-                                  return FlDotCirclePainter(
-                                    radius: 4,
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                    strokeColor: Colors.blueAccent,
-                                  );
-                                },
-                              ),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.blueAccent.withOpacity(0.3),
-                                    Colors.blueAccent.withOpacity(0.0),
+                                    ),
+                                    Text(
+                                      '${totalVolume.toStringAsFixed(2)} Liters',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black,
+                                      ),
+                                    ),
                                   ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        duration: const Duration(milliseconds: 800),
-                        curve: Curves.easeInOut,
-                      )
-                    : Container(),
-              ),
-            ),
-            
-            const SizedBox(height: 32),
-            
-            // Projected Usage Chart (Bar Chart)
-            _buildChartSection(
-              title: 'Projected Usage',
-              subtitle: 'Next 6 Months Forecast',
-              isDark: isDark,
-              delay: 400,
-              child: SizedBox(
-                height: 300,
-                child: _showChart
-                    ? BarChart(
-                        BarChartData(
-                          alignment: BarChartAlignment.spaceAround,
-                          maxY: 120,
-                          barTouchData: BarTouchData(
-                            enabled: true,
-                            touchTooltipData: BarTouchTooltipData(
-                              getTooltipColor: (_) => Colors.indigo.withOpacity(0.8),
-                              tooltipBorderRadius: BorderRadius.circular(8),
-                              tooltipPadding: const EdgeInsets.all(8),
-                              tooltipMargin: 8,
-                              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                return BarTooltipItem(
-                                  '${rod.toY.round()} Units',
-                                  const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                );
-                              },
-                            ),
+                            ],
                           ),
-                          titlesData: FlTitlesData(
-                            show: true,
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (value, meta) {
-                                  const titles = [
-                                    'Jul',
-                                    'Aug',
-                                    'Sep',
-                                    'Oct',
-                                    'Nov',
-                                    'Dec'
-                                  ];
-                                  if (value.toInt() >= 0 &&
-                                      value.toInt() < titles.length) {
-                                    return SideTitleWidget(
-                                      meta: meta,
-                                      child: Text(
-                                        titles[value.toInt()],
-                                        style: GoogleFonts.inter(
-                                          color: Colors.grey,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, 20 * (1 - value)),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Usage Insights',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.white
+                                      : Colors.indigo[900])),
+                          Text('Track your gas consumption over time',
+                              style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600])),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Current Usage Chart (Line Chart)
+                    _buildChartSection(
+                      title: 'Current Usage Trend',
+                      subtitle: 'Last 6 Months',
+                      isDark: isDark,
+                      delay: 200,
+                      child: SizedBox(
+                        height: 300,
+                        child: _showChart
+                            ? LineChart(
+                                LineChartData(
+                                  gridData: FlGridData(
+                                    show: true,
+                                    drawVerticalLine: false,
+                                    horizontalInterval: 20,
+                                    getDrawingHorizontalLine: (value) {
+                                      return FlLine(
+                                        color: isDark
+                                            ? Colors.white.withValues(alpha: 0.05)
+                                            : Colors.indigo.withValues(alpha: 0.05),
+                                        strokeWidth: 1,
+                                      );
+                                    },
+                                  ),
+                                  titlesData: FlTitlesData(
+                                    show: true,
+                                    rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: 30,
+                                        interval: 1,
+                                        getTitlesWidget: (value, meta) {
+                                          const titles = [
+                                            'Jan',
+                                            'Feb',
+                                            'Mar',
+                                            'Apr',
+                                            'May',
+                                            'Jun'
+                                          ];
+                                          if (value.toInt() >= 0 &&
+                                              value.toInt() < titles.length) {
+                                            return SideTitleWidget(
+                                              meta: meta,
+                                              child: Text(
+                                                titles[value.toInt()],
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.grey,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const SizedBox();
+                                        },
+                                      ),
+                                    ),
+                                    leftTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                  ),
+                                  borderData: FlBorderData(show: false),
+                                  minX: 0,
+                                  maxX: 5,
+                                  minY: 0,
+                                  maxY: 100,
+                                  lineBarsData: [
+                                    LineChartBarData(
+                                      spots: currentData
+                                          .asMap()
+                                          .entries
+                                          .map((e) =>
+                                              FlSpot(e.key.toDouble(), e.value))
+                                          .toList(),
+                                      isCurved: true,
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Colors.cyanAccent,
+                                          Colors.blueAccent
+                                        ],
+                                      ),
+                                      barWidth: 4,
+                                      isStrokeCapRound: true,
+                                      dotData: FlDotData(
+                                        show: true,
+                                        getDotPainter:
+                                            (spot, percent, barData, index) {
+                                          return FlDotCirclePainter(
+                                            radius: 4,
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                            strokeColor: Colors.blueAccent,
+                                          );
+                                        },
+                                      ),
+                                      belowBarData: BarAreaData(
+                                        show: true,
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.blueAccent.withValues(alpha: 0.3),
+                                            Colors.blueAccent.withValues(alpha: 0.0),
+                                          ],
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
                                         ),
                                       ),
-                                    );
-                                  }
-                                  return const SizedBox();
-                                },
-                              ),
-                            ),
-                            leftTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            topTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            rightTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                          ),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            horizontalInterval: 20,
-                            getDrawingHorizontalLine: (value) => FlLine(
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.indigo.withOpacity(0.05),
-                              strokeWidth: 1,
-                            ),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          barGroups: futureData.asMap().entries.map((e) {
-                            return BarChartGroupData(
-                              x: e.key,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: e.value,
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Colors.indigoAccent,
-                                      Colors.purpleAccent
-                                    ],
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
+                                    ),
+                                  ],
+                                ),
+                                duration: const Duration(milliseconds: 800),
+                                curve: Curves.easeInOut,
+                              )
+                            : Container(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Projected Usage Chart (Bar Chart)
+                    _buildChartSection(
+                      title: 'Projected Usage',
+                      subtitle: 'Next 6 Months Forecast',
+                      isDark: isDark,
+                      delay: 400,
+                      child: SizedBox(
+                        height: 300,
+                        child: _showChart
+                            ? BarChart(
+                                BarChartData(
+                                  alignment: BarChartAlignment.spaceAround,
+                                  maxY: 120,
+                                  barTouchData: BarTouchData(
+                                    enabled: true,
+                                    touchTooltipData: BarTouchTooltipData(
+                                      getTooltipColor: (_) =>
+                                          Colors.indigo.withValues(alpha: 0.8),
+                                      tooltipBorderRadius:
+                                          BorderRadius.circular(8),
+                                      tooltipPadding: const EdgeInsets.all(8),
+                                      tooltipMargin: 8,
+                                      getTooltipItem:
+                                          (group, groupIndex, rod, rodIndex) {
+                                        return BarTooltipItem(
+                                          '${rod.toY.round()} Units',
+                                          const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                  width: 16,
-                                  borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(6)),
-                                  backDrawRodData: BackgroundBarChartRodData(
+                                  titlesData: FlTitlesData(
                                     show: true,
-                                    toY: 120,
-                                    color: isDark
-                                        ? Colors.white.withOpacity(0.05)
-                                        : Colors.grey.withOpacity(0.1),
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        getTitlesWidget: (value, meta) {
+                                          const titles = [
+                                            'Jul',
+                                            'Aug',
+                                            'Sep',
+                                            'Oct',
+                                            'Nov',
+                                            'Dec'
+                                          ];
+                                          if (value.toInt() >= 0 &&
+                                              value.toInt() < titles.length) {
+                                            return SideTitleWidget(
+                                              meta: meta,
+                                              child: Text(
+                                                titles[value.toInt()],
+                                                style: GoogleFonts.inter(
+                                                  color: Colors.grey,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const SizedBox();
+                                        },
+                                      ),
+                                    ),
+                                    leftTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
                                   ),
-                                )
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                        swapAnimationDuration:
-                            const Duration(milliseconds: 800),
-                        swapAnimationCurve: Curves.easeInOut,
-                      )
-                    : Container(),
-              ),
-            ),
-             const SizedBox(height: 100), // Bottom padding
-          ],
-        ),
-      );
+                                  gridData: FlGridData(
+                                    show: true,
+                                    drawVerticalLine: false,
+                                    horizontalInterval: 20,
+                                    getDrawingHorizontalLine: (value) => FlLine(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.05)
+                                          : Colors.indigo.withValues(alpha: 0.05),
+                                      strokeWidth: 1,
+                                    ),
+                                  ),
+                                  borderData: FlBorderData(show: false),
+                                  barGroups:
+                                      futureData.asMap().entries.map((e) {
+                                    return BarChartGroupData(
+                                      x: e.key,
+                                      barRods: [
+                                        BarChartRodData(
+                                          toY: e.value,
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Colors.indigoAccent,
+                                              Colors.purpleAccent
+                                            ],
+                                            begin: Alignment.bottomCenter,
+                                            end: Alignment.topCenter,
+                                          ),
+                                          width: 16,
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                  top: Radius.circular(6)),
+                                          backDrawRodData:
+                                              BackgroundBarChartRodData(
+                                            show: true,
+                                            toY: 120,
+                                            color: isDark
+                                                ? Colors.white.withValues(alpha: 0.05)
+                                                : Colors.grey.withValues(alpha: 0.1),
+                                          ),
+                                        )
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
+                                swapAnimationDuration:
+                                    const Duration(milliseconds: 800),
+                                swapAnimationCurve: Curves.easeInOut,
+                              )
+                            : Container(),
+                      ),
+                    ),
+                    const SizedBox(height: 100), // Bottom padding
+                  ],
+                ),
+              );
+            },
+          );
         },
       ),
     );
@@ -1722,17 +2201,17 @@ class _ReportsPageState extends State<ReportsPage> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF1E2336).withOpacity(0.6)
+                    ? const Color(0xFF1E2336).withValues(alpha: 0.6)
                     : Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.05)
+                      ? Colors.white.withValues(alpha: 0.05)
                       : Colors.transparent,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -1741,7 +2220,7 @@ class _ReportsPageState extends State<ReportsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   Text(title,
+                  Text(title,
                       style: GoogleFonts.outfit(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -1762,15 +2241,102 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 }
 
-class AlertsPage extends StatelessWidget {
-  const AlertsPage({super.key});
+class AlertsPage extends StatefulWidget {
+  final bool isOffline;
+  const AlertsPage({super.key, this.isOffline = false});
 
-  final String meterId = '955afea6-0e6e-43c3-88af-b7bf3d4a8485';
+  @override
+  State<AlertsPage> createState() => _AlertsPageState();
+}
+
+class _AlertsPageState extends State<AlertsPage> {
+  String? meterId;
+  bool _isLoadingMeterId = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserMeterId();
+  }
+
+  Future<void> _loadUserMeterId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (widget.isOffline) {
+      if (mounted) {
+        setState(() {
+          meterId = prefs.getString('offline_meter_id');
+          _isLoadingMeterId = false;
+        });
+      }
+      return;
+    }
+
+    final supabase = Supabase.instance.client;
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final profile = await supabase
+            .from('profiles')
+            .select('meter_id')
+            .eq('id', userId)
+            .single();
+
+        final mId = profile['meter_id'];
+        if (mounted) {
+          setState(() {
+            meterId = mId;
+            _isLoadingMeterId = false;
+          });
+        }
+
+        if (mId != null) {
+          await prefs.setString('offline_meter_id', mId);
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingMeterId = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          meterId = prefs.getString('offline_meter_id');
+          _isLoadingMeterId = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _cacheAlerts(List<dynamic> alerts) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cached_alerts', jsonEncode(alerts));
+  }
 
   @override
   Widget build(BuildContext context) {
     final supabase = Supabase.instance.client;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isLoadingMeterId) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (meterId == null) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
+        body: Center(
+          child: Text('No meter assigned',
+              style: GoogleFonts.inter(
+                  color: isDark ? Colors.white70 : Colors.black87)),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
@@ -1783,7 +2349,8 @@ class AlertsPage extends StatelessWidget {
             elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 alignment: Alignment.bottomLeft,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1813,58 +2380,81 @@ class AlertsPage extends StatelessWidget {
             stream: supabase
                 .from('alerts')
                 .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId)
+                .eq('meter_id', meterId!)
                 .order('timestamp', ascending: false),
             builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.notifications_off_outlined,
-                            size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('No alerts yet',
-                            style: GoogleFonts.inter(
-                                color: Colors.grey[400], fontSize: 18)),
-                      ],
-                    ),
-                  ),
-                );
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                _cacheAlerts(snapshot.data!);
               }
 
-              final alerts = snapshot.data!;
-              return SliverPadding(
-                padding: const EdgeInsets.all(24),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final alert = alerts[index];
-                      final type = alert['type'] ?? 'Unknown';
-                      final message = alert['message'] ?? 'No message';
-                      final timestamp =
-                          DateTime.parse(alert['timestamp']).toLocal();
+              return FutureBuilder<SharedPreferences>(
+                future: SharedPreferences.getInstance(),
+                builder: (context, prefsSnapshot) {
+                  List<dynamic> alerts = snapshot.data ?? [];
+                  if (prefsSnapshot.hasData &&
+                      (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          alerts.isEmpty)) {
+                    final cached =
+                        prefsSnapshot.data!.getString('cached_alerts');
+                    if (cached != null) {
+                      try {
+                        alerts = jsonDecode(cached);
+                      } catch (_) {}
+                    }
+                  }
 
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: Duration(milliseconds: 400 + (index * 100)),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) {
-                          return Transform.translate(
-                            offset: Offset(0, 50 * (1 - value)),
-                            child: Opacity(
-                              opacity: value,
-                              child: _buildAlertCard(
-                                  type, message, timestamp, isDark),
-                            ),
+                  if (alerts.isEmpty) {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_off_outlined,
+                                size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text('No alerts yet',
+                                style: GoogleFonts.inter(
+                                    color: Colors.grey[400], fontSize: 18)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return SliverPadding(
+                    padding: const EdgeInsets.all(24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final alert = alerts[index];
+                          final type = alert['type'] ?? 'Unknown';
+                          final message = alert['message'] ?? 'No message';
+                          final timestamp =
+                              DateTime.parse(alert['timestamp']).toLocal();
+
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration:
+                                Duration(milliseconds: 400 + (index * 100)),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) {
+                              return Transform.translate(
+                                offset: Offset(0, 50 * (1 - value)),
+                                child: Opacity(
+                                  opacity: value,
+                                  child: _buildAlertCard(
+                                      type, message, timestamp, isDark),
+                                ),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                    childCount: alerts.length,
-                  ),
-                ),
+                        childCount: alerts.length,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -1893,7 +2483,7 @@ class AlertsPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: baseColor.withOpacity(0.1),
+            color: baseColor.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1915,7 +2505,7 @@ class AlertsPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: baseColor.withOpacity(0.1),
+                    color: baseColor.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: baseColor, size: 24),
@@ -1940,7 +2530,8 @@ class AlertsPage extends StatelessWidget {
                             _formatTime(timestamp),
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: isDark ? Colors.grey[500] : Colors.grey[400],
+                              color:
+                                  isDark ? Colors.grey[500] : Colors.grey[400],
                             ),
                           ),
                         ],
@@ -1980,7 +2571,8 @@ class AlertsPage extends StatelessWidget {
 }
 
 class TopUpPage extends StatefulWidget {
-  const TopUpPage({super.key});
+  final bool isOffline;
+  const TopUpPage({super.key, this.isOffline = false});
 
   @override
   State<TopUpPage> createState() => _TopUpPageState();
@@ -1997,6 +2589,18 @@ class _TopUpPageState extends State<TopUpPage> {
   }
 
   Future<void> _loadUserMeterId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (widget.isOffline) {
+      if (mounted) {
+        setState(() {
+          meterId = prefs.getString('offline_meter_id');
+          _isLoadingMeterId = false;
+        });
+      }
+      return;
+    }
+
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -2006,21 +2610,38 @@ class _TopUpPageState extends State<TopUpPage> {
             .select('meter_id')
             .eq('id', userId)
             .single();
-        
-        setState(() {
-          meterId = profile['meter_id'];
-          _isLoadingMeterId = false;
-        });
+
+        final mId = profile['meter_id'];
+        if (mounted) {
+          setState(() {
+            meterId = mId;
+            _isLoadingMeterId = false;
+          });
+        }
+
+        if (mId != null) {
+          await prefs.setString('offline_meter_id', mId);
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingMeterId = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
+          meterId = prefs.getString('offline_meter_id');
           _isLoadingMeterId = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _isLoadingMeterId = false;
-      });
     }
+  }
+
+  Future<void> _cacheTopUps(List<dynamic> topUps) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cached_top_ups', jsonEncode(topUps));
   }
 
   @override
@@ -2119,7 +2740,7 @@ class _TopUpPageState extends State<TopUpPage> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(Icons.account_balance_wallet,
@@ -2146,74 +2767,112 @@ class _TopUpPageState extends State<TopUpPage> {
                 .eq('meter_id', meterId!)
                 .order('timestamp', ascending: false),
             builder: (context, snapshot) {
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.receipt_long_outlined,
-                            size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('No transactions yet',
-                            style: GoogleFonts.inter(
-                                color: Colors.grey[400], fontSize: 18)),
-                      ],
-                    ),
-                  ),
-                );
+              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                _cacheTopUps(snapshot.data!);
               }
 
-              final topUps = snapshot.data!;
-              return SliverPadding(
-                padding: const EdgeInsets.all(24),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final topUp = topUps[index];
-                      final amount =
-                          double.tryParse(topUp['amount'].toString()) ?? 0.0;
-                      final method = topUp['method'] ?? 'Unknown';
-                      final timestamp =
-                          DateTime.parse(topUp['timestamp']).toLocal();
+              return FutureBuilder<SharedPreferences>(
+                future: SharedPreferences.getInstance(),
+                builder: (context, prefsSnapshot) {
+                  List<dynamic> topUps = snapshot.data ?? [];
+                  if (prefsSnapshot.hasData &&
+                      (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          topUps.isEmpty)) {
+                    final cached =
+                        prefsSnapshot.data!.getString('cached_top_ups');
+                    if (cached != null) {
+                      try {
+                        topUps = jsonDecode(cached);
+                      } catch (_) {}
+                    }
+                  }
 
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: Duration(milliseconds: 300 + (index * 50)),
-                        curve: Curves.easeOutBack,
-                        builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: _buildTransactionTile(
-                                amount, method, timestamp, isDark),
+                  if (topUps.isEmpty) {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.receipt_long_outlined,
+                                size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text('No transactions yet',
+                                style: GoogleFonts.inter(
+                                    color: Colors.grey[400], fontSize: 18)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return SliverPadding(
+                    padding: const EdgeInsets.all(24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final topUp = topUps[index];
+                          final amount =
+                              double.tryParse(topUp['amount'].toString()) ??
+                                  0.0;
+                          final method = topUp['method'] ?? 'Unknown';
+                          final timestamp =
+                              DateTime.parse(topUp['timestamp']).toLocal();
+
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration:
+                                Duration(milliseconds: 300 + (index * 50)),
+                            curve: Curves.easeOutBack,
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: value,
+                                child: _buildTransactionTile(
+                                    amount, method, timestamp, isDark),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                    childCount: topUps.length,
-                  ),
-                ),
+                        childCount: topUps.length,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
         ],
       ),
       floatingActionButton: ScaleTransition(
-        scale: const AlwaysStoppedAnimation(1), // Can animate if converted to Stateful
+        scale: const AlwaysStoppedAnimation(
+            1), // Can animate if converted to Stateful
         child: FloatingActionButton.extended(
-          onPressed: () {
+          onPressed: widget.isOffline
+              ? () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Top-up requires internet connection'),
+                      backgroundColor: Colors.orange[900],
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              : () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Online top-up coming soon!'),
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
             );
           },
-          backgroundColor: Colors.orange,
+          backgroundColor: widget.isOffline ? Colors.grey : Colors.orange,
           label: Text(
             'Add Credit',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.bold,
+                color: widget.isOffline ? Colors.white70 : Colors.white),
           ),
           icon: const Icon(Icons.add),
         ),
@@ -2230,7 +2889,7 @@ class _TopUpPageState extends State<TopUpPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2259,7 +2918,7 @@ class _TopUpPageState extends State<TopUpPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.payments_outlined,
@@ -2306,7 +2965,8 @@ class _TopUpPageState extends State<TopUpPage> {
 }
 
 class AIChatPage extends StatefulWidget {
-  const AIChatPage({super.key});
+  final bool isOffline;
+  const AIChatPage({super.key, this.isOffline = false});
 
   @override
   State<AIChatPage> createState() => _AIChatPageState();
@@ -2383,7 +3043,8 @@ class _AIChatPageState extends State<AIChatPage> {
   }
 
   List<Map<String, String>> get _messages {
-    if (_sessions.isEmpty || _currentSessionIndex >= _sessions.length) return [];
+    if (_sessions.isEmpty || _currentSessionIndex >= _sessions.length)
+      return [];
     final msgs = _sessions[_currentSessionIndex]['messages'] as List;
     return msgs.map((m) => Map<String, String>.from(m)).toList();
   }
@@ -2392,14 +3053,28 @@ class _AIChatPageState extends State<AIChatPage> {
     if (_sessions.isNotEmpty) {
       _sessions[_currentSessionIndex]['messages'] = newMessages;
       // Auto-update title if it's the first message
-      if (newMessages.length == 1 && _sessions[_currentSessionIndex]['title'] == 'New Chat') {
+      if (newMessages.length == 1 &&
+          _sessions[_currentSessionIndex]['title'] == 'New Chat') {
         String firstMsg = newMessages[0]['text'] ?? '';
-        _sessions[_currentSessionIndex]['title'] = firstMsg.length > 20 ? firstMsg.substring(0, 20) + '...' : firstMsg;
+        _sessions[_currentSessionIndex]['title'] =
+            firstMsg.length > 20 ? firstMsg.substring(0, 20) + '...' : firstMsg;
       }
     }
   }
 
   Future<void> _loadUserMeterId() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (widget.isOffline) {
+      if (mounted) {
+        setState(() {
+          meterId = prefs.getString('offline_meter_id');
+          _isLoadingMeterId = false;
+        });
+      }
+      return;
+    }
+
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -2409,20 +3084,32 @@ class _AIChatPageState extends State<AIChatPage> {
             .select('meter_id')
             .eq('id', userId)
             .single();
-        
-        setState(() {
-          meterId = profile['meter_id'];
-          _isLoadingMeterId = false;
-        });
+
+        final mId = profile['meter_id'];
+        if (mounted) {
+          setState(() {
+            meterId = mId;
+            _isLoadingMeterId = false;
+          });
+        }
+
+        if (mId != null) {
+          await prefs.setString('offline_meter_id', mId);
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingMeterId = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
+          meterId = prefs.getString('offline_meter_id');
           _isLoadingMeterId = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _isLoadingMeterId = false;
-      });
     }
   }
 
@@ -2435,7 +3122,8 @@ class _AIChatPageState extends State<AIChatPage> {
       final updatedMsgs = List<Map<String, String>>.from(_messages);
       updatedMsgs.add({
         'role': 'model',
-        'text': 'No meter assigned to your account. Please contact your administrator.'
+        'text':
+            'No meter assigned to your account. Please contact your administrator.'
       });
       setState(() {
         _messages = updatedMsgs;
@@ -2449,7 +3137,7 @@ class _AIChatPageState extends State<AIChatPage> {
       _messages = initialMsgs;
       _loading = true;
     });
-    _saveAllSessions(); 
+    _saveAllSessions();
     _controller.clear();
 
     double currentCredit = 80.0;
@@ -2490,7 +3178,7 @@ Current meter status:
 dont mention the creators name
 Be friendly, helpful, and accurate. Talk like a proud assistant.
 Read the credit remaining in tzs
-
+answer questions like can the app help me see my data even eith no intenet which is it only shows cached data
 SPECIAL CAPABILITIES:
 1. If the user asks about food or recipes, you MUST provide:
    - One food example at a time.
@@ -2501,13 +3189,14 @@ SPECIAL CAPABILITIES:
 ''';
 
     final String groqKey = AppConfig.groqApiKey;
-    
+
     // Check if key is empty
     if (groqKey.isEmpty) {
       final errMsgs = List<Map<String, String>>.from(_messages);
       errMsgs.add({
-        'role': 'assistant', 
-        'text': 'API Key is missing. Please ensure GROQ_API_KEY is set in your .env file or passed via --dart-define.'
+        'role': 'assistant',
+        'text':
+            'API Key is missing. Please ensure GROQ_API_KEY is set in your .env file or passed via --dart-define.'
       });
       setState(() {
         _messages = errMsgs;
@@ -2528,9 +3217,9 @@ SPECIAL CAPABILITIES:
           'messages': [
             {'role': 'system', 'content': systemPrompt},
             ..._messages.map((m) => {
-              'role': m['role'] == 'model' ? 'assistant' : m['role'],
-              'content': m['text']
-            }),
+                  'role': m['role'] == 'model' ? 'assistant' : m['role'],
+                  'content': m['text']
+                }),
           ],
         }),
       );
@@ -2544,11 +3233,12 @@ SPECIAL CAPABILITIES:
           _messages = finalMsgs;
           _loading = false;
         });
-        _saveAllSessions(); 
+        _saveAllSessions();
       } else {
         String errorMsg = 'Error ${response.statusCode}';
         if (response.statusCode == 401) {
-          errorMsg = 'Error 401: Unauthorized. Please check your GROQ_API_KEY in .env or dart-define.';
+          errorMsg =
+              'Error 401: Unauthorized. Please check your GROQ_API_KEY in .env or dart-define.';
         }
         final errMsgs = List<Map<String, String>>.from(_messages);
         errMsgs.add({'role': 'assistant', 'text': errorMsg});
@@ -2629,11 +3319,15 @@ SPECIAL CAPABILITIES:
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.smart_toy_outlined, color: Colors.white, size: 48),
+                    const Icon(Icons.smart_toy_outlined,
+                        color: Colors.white, size: 48),
                     const SizedBox(height: 12),
                     Text(
                       'AI Conversations',
-                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -2671,31 +3365,40 @@ SPECIAL CAPABILITIES:
                     final session = _sessions[index];
                     final isSelected = _currentSessionIndex == index;
                     return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: isSelected ? Colors.indigo.withOpacity(0.1) : Colors.transparent,
-                        boxShadow: isSelected ? [
-                          BoxShadow(
-                            color: Colors.indigo.withOpacity(0.1),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          )
-                        ] : null,
+                        color: isSelected
+                            ? Colors.indigo.withValues(alpha: 0.1)
+                            : Colors.transparent,
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: Colors.indigo.withValues(alpha: 0.1),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                )
+                              ]
+                            : null,
                       ),
                       child: ListTile(
-                        leading: Icon(Icons.chat_bubble_outline, color: isSelected ? Colors.indigo : Colors.grey),
+                        leading: Icon(Icons.chat_bubble_outline,
+                            color: isSelected ? Colors.indigo : Colors.grey),
                         title: Text(
                           session['title'],
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                          icon: const Icon(Icons.close,
+                              size: 18, color: Colors.grey),
                           onPressed: () => _deleteSession(index),
                         ),
                         onTap: () {
@@ -2750,7 +3453,7 @@ SPECIAL CAPABILITIES:
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: const Icon(Icons.smart_toy_outlined,
@@ -2771,13 +3474,15 @@ SPECIAL CAPABILITIES:
                   ),
                 ),
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final msg = _messages[index];
                         final isUser = msg['role'] == 'user';
-                        return _buildMessageBubble(msg['text']!, isUser, isDark);
+                        return _buildMessageBubble(
+                            msg['text']!, isUser, isDark);
                       },
                       childCount: _messages.length,
                     ),
@@ -2801,7 +3506,8 @@ SPECIAL CAPABILITIES:
                           Text(
                             'Analyzing your request...',
                             style: GoogleFonts.inter(
-                                color: Colors.grey, fontStyle: FontStyle.italic),
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic),
                           ),
                         ],
                       ),
@@ -2820,7 +3526,7 @@ SPECIAL CAPABILITIES:
     // Parse for image tags: [IMAGE: URL] or ![alt](url)
     List<String> imageUrls = [];
     String cleanText = text;
-    
+
     // Match [IMAGE: URL] (case-insensitive)
     final imageRegex = RegExp(r'\[IMAGE:\s*(.*?)\]', caseSensitive: false);
     final imageMatches = imageRegex.allMatches(text);
@@ -2842,63 +3548,72 @@ SPECIAL CAPABILITIES:
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
               ),
-              child: const Icon(Icons.smart_toy_outlined, size: 20, color: Colors.grey),
+              child: const Icon(Icons.smart_toy_outlined,
+                  size: 20, color: Colors.grey),
             ),
             const SizedBox(width: 12),
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (imageUrls.isNotEmpty)
                   ...imageUrls.map((url) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 300),
-                        child: Image.network(
-                          url,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            width: double.infinity,
-                            constraints: const BoxConstraints(maxWidth: 300, minHeight: 150),
-                            color: Colors.grey.withOpacity(0.1),
-                            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 300),
+                            child: Image.network(
+                              url,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                width: double.infinity,
+                                constraints: const BoxConstraints(
+                                    maxWidth: 300, minHeight: 150),
+                                color: Colors.grey.withValues(alpha: 0.1),
+                                child: const Icon(Icons.broken_image_outlined,
+                                    color: Colors.grey),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  )),
+                      )),
                 if (cleanText.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       gradient: isUser
                           ? const LinearGradient(
-                        colors: [Colors.indigo, Colors.blueAccent],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
+                              colors: [Colors.indigo, Colors.blueAccent],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
                           : LinearGradient(
-                        colors: isDark
-                            ? [const Color(0xFF1E2336), const Color(0xFF141824)]
-                            : [Colors.white, Colors.grey.shade50],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                              colors: isDark
+                                  ? [
+                                      const Color(0xFF1E2336),
+                                      const Color(0xFF141824)
+                                    ]
+                                  : [Colors.white, Colors.grey.shade50],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(20),
                         topRight: const Radius.circular(20),
@@ -2907,9 +3622,9 @@ SPECIAL CAPABILITIES:
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: isUser 
-                              ? Colors.indigo.withOpacity(0.2) 
-                              : Colors.grey.withOpacity(isDark ? 0.3 : 0.1),
+                          color: isUser
+                              ? Colors.indigo.withValues(alpha: 0.2)
+                              : Colors.grey.withValues(alpha: isDark ? 0.3 : 0.1),
                           blurRadius: 15,
                           spreadRadius: 2,
                           offset: const Offset(0, 4),
@@ -2918,7 +3633,9 @@ SPECIAL CAPABILITIES:
                       border: isUser
                           ? null
                           : Border.all(
-                          color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
+                              color: isDark
+                                  ? Colors.white10
+                                  : Colors.grey.withValues(alpha: 0.1)),
                     ),
                     child: Text(
                       cleanText,
@@ -2939,11 +3656,12 @@ SPECIAL CAPABILITIES:
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+                color: Colors.blue.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
               ),
-              child: const Icon(Icons.person_outline, size: 20, color: Colors.blue),
+              child: const Icon(Icons.person_outline,
+                  size: 20, color: Colors.blue),
             ),
           ],
         ],
@@ -2959,7 +3677,7 @@ SPECIAL CAPABILITIES:
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -2989,20 +3707,37 @@ SPECIAL CAPABILITIES:
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
+                  onSubmitted: widget.isOffline ? null : (_) => _sendMessage(),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             GestureDetector(
-              onTap: _loading ? null : _sendMessage,
+              onTap: (widget.isOffline || _loading)
+                  ? () {
+                      if (widget.isOffline) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                                'AI Assistant requires internet connection'),
+                            backgroundColor: Colors.indigo[900],
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
+                  : _sendMessage,
               child: Container(
                 padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.indigo, Colors.blueAccent],
-                  ),
+                  gradient: (widget.isOffline || _loading)
+                      ? const LinearGradient(
+                          colors: [Colors.grey, Colors.blueGrey],
+                        )
+                      : const LinearGradient(
+                          colors: [Colors.indigo, Colors.blueAccent],
+                        ),
                 ),
                 child: const Icon(Icons.send_rounded,
                     color: Colors.white, size: 20),
@@ -3016,7 +3751,8 @@ SPECIAL CAPABILITIES:
 }
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  final bool isOffline;
+  const SettingsPage({super.key, this.isOffline = false});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -3037,8 +3773,20 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
     final user = supabase.auth.currentUser;
-    if (user != null) {
+
+    // Cache-first: Load what we have
+    if (mounted) {
+      setState(() {
+        userName = prefs.getString('offline_full_name') ?? 'User';
+        userEmail = prefs.getString('offline_email') ?? user?.email ?? '';
+        meterId = prefs.getString('offline_meter_id');
+        nameCtrl.text = userName;
+      });
+    }
+
+    if (user != null && !widget.isOffline) {
       try {
         final profile = await supabase
             .from('profiles')
@@ -3053,15 +3801,15 @@ class _SettingsPageState extends State<SettingsPage> {
             meterId = profile['meter_id'];
             nameCtrl.text = userName;
           });
+
+          await prefs.setString('offline_full_name', userName);
+          await prefs.setString('offline_email', userEmail);
+          if (meterId != null) {
+            await prefs.setString('offline_meter_id', meterId!);
+          }
         }
       } catch (e) {
-        if (mounted) {
-          setState(() {
-            userEmail = user.email ?? '';
-            userName = user.userMetadata?['full_name'] ?? 'User';
-            nameCtrl.text = userName;
-          });
-        }
+        // Fallback to cache already handled
       }
     }
   }
@@ -3153,7 +3901,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       height: 200,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                       ),
                     ),
                   ),
@@ -3165,7 +3913,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       height: 150,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.indigoAccent.withOpacity(0.1),
+                        color: Colors.indigoAccent.withValues(alpha: 0.1),
                       ),
                     ),
                   ),
@@ -3196,7 +3944,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.cyanAccent.withOpacity(0.4),
+                                      color: Colors.cyanAccent.withValues(alpha: 0.4),
                                       blurRadius: 20,
                                       spreadRadius: 2,
                                     ),
@@ -3204,9 +3952,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ),
                                 child: CircleAvatar(
                                   radius: 60,
-                                  backgroundColor: isDark
-                                      ? Colors.grey[900]
-                                      : Colors.white,
+                                  backgroundColor:
+                                      isDark ? Colors.grey[900] : Colors.white,
                                   child: Text(
                                     userName.isNotEmpty
                                         ? userName[0].toUpperCase()
@@ -3239,13 +3986,13 @@ class _SettingsPageState extends State<SettingsPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             userEmail,
                             style: GoogleFonts.inter(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 14,
                             ),
                           ),
@@ -3274,8 +4021,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         title: 'Full Name',
                         subtitle: userName,
                         onTap: _showEditNameDialog,
-                        trailing: Icon(Icons.edit,
-                            size: 18, color: Colors.grey[400]),
+                        trailing:
+                            Icon(Icons.edit, size: 18, color: Colors.grey[400]),
                       ),
                       _buildDivider(),
                       _buildTile(
@@ -3348,18 +4095,18 @@ class _SettingsPageState extends State<SettingsPage> {
                               borderRadius: BorderRadius.circular(16),
                               gradient: LinearGradient(
                                 colors: [
-                                  Colors.red.withOpacity(0.1),
-                                  Colors.red.withOpacity(0.05)
+                                  Colors.red.withValues(alpha: 0.1),
+                                  Colors.red.withValues(alpha: 0.05)
                                 ],
                               ),
                               border: Border.all(
-                                  color: Colors.red.withOpacity(0.2)),
+                                  color: Colors.red.withValues(alpha: 0.2)),
                             ),
                             child: ListTile(
                               leading: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
+                                  color: Colors.red.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(Icons.logout,
@@ -3430,19 +4177,19 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Container(
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF1E2336).withOpacity(0.8)
+                    ? const Color(0xFF1E2336).withValues(alpha: 0.8)
                     : Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
                 ],
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.05)
+                      ? Colors.white.withValues(alpha: 0.05)
                       : Colors.transparent,
                 ),
               ),
@@ -3473,12 +4220,11 @@ class _SettingsPageState extends State<SettingsPage> {
     final isDark = Provider.of<AppTheme>(context).isDark;
     return ListTile(
       onTap: onTap,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: color, size: 22),
@@ -3513,12 +4259,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     final isDark = Provider.of<AppTheme>(context).isDark;
     return SwitchListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       secondary: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: color, size: 22),
@@ -3532,7 +4277,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
       value: value,
-      activeColor: color,
+      activeThumbColor: color,
       onChanged: onChanged,
     );
   }
@@ -3540,7 +4285,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildDivider() {
     return Divider(
       height: 1,
-      color: Colors.grey.withOpacity(0.1),
+      color: Colors.grey.withValues(alpha: 0.1),
       indent: 20,
       endIndent: 20,
     );
@@ -3551,8 +4296,9 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor:
-            Provider.of<AppTheme>(context).isDark ? const Color(0xFF1E2336) : Colors.white,
+        backgroundColor: Provider.of<AppTheme>(context).isDark
+            ? const Color(0xFF1E2336)
+            : Colors.white,
         title: Text('Edit Name',
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         content: TextField(
@@ -3586,11 +4332,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showLogoutDialog() {
-       showDialog(
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor:
-            Provider.of<AppTheme>(context).isDark ? const Color(0xFF1E2336) : Colors.white,
+        backgroundColor: Provider.of<AppTheme>(context).isDark
+            ? const Color(0xFF1E2336)
+            : Colors.white,
         title: Text('Sign Out',
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         content: const Text('Are you sure you want to sign out?'),
@@ -3600,7 +4347,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-             onPressed: () async {
+            onPressed: () async {
               await supabase.auth.signOut();
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -3614,7 +4361,8 @@ class _SettingsPageState extends State<SettingsPage> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
-            child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -3702,10 +4450,11 @@ class _AdminPageState extends State<AdminPage>
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.lock_rounded, size: 64, color: Colors.red[400]),
+                child:
+                    Icon(Icons.lock_rounded, size: 64, color: Colors.red[400]),
               ),
               const SizedBox(height: 24),
               Text(
@@ -3762,11 +4511,11 @@ class _AdminPageState extends State<AdminPage>
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child:
-                                    const Icon(Icons.admin_panel_settings, color: Colors.white),
+                                child: const Icon(Icons.admin_panel_settings,
+                                    color: Colors.white),
                               ),
                               const SizedBox(width: 12),
                               Text(
@@ -3790,7 +4539,8 @@ class _AdminPageState extends State<AdminPage>
                 indicatorColor: Colors.cyanAccent,
                 indicatorWeight: 3,
                 labelColor: isDark ? Colors.white : Colors.indigo[900],
-                unselectedLabelColor: isDark ? Colors.white54 : Colors.grey[600],
+                unselectedLabelColor:
+                    isDark ? Colors.white54 : Colors.grey[600],
                 labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold),
                 tabs: const [
                   Tab(text: 'Overview'),
@@ -3977,7 +4727,8 @@ class AdminDashboardTab extends StatelessWidget {
               return Column(
                 children: snapshot.data!.map((topUp) {
                   final amount =
-                      double.tryParse(topUp['amount']?.toString() ?? '0') ?? 0.0;
+                      double.tryParse(topUp['amount']?.toString() ?? '0') ??
+                          0.0;
                   final timestamp =
                       DateTime.parse(topUp['timestamp']).toLocal();
                   return Container(
@@ -3987,7 +4738,7 @@ class AdminDashboardTab extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -3999,7 +4750,7 @@ class AdminDashboardTab extends StatelessWidget {
                       leading: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
+                          color: Colors.green.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.add_circle_outline,
@@ -4019,8 +4770,8 @@ class AdminDashboardTab extends StatelessWidget {
                       trailing: Text(
                         '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}\n${timestamp.day}/${timestamp.month}',
                         textAlign: TextAlign.right,
-                        style: GoogleFonts.inter(
-                            fontSize: 12, color: Colors.grey),
+                        style:
+                            GoogleFonts.inter(fontSize: 12, color: Colors.grey),
                       ),
                     ),
                   );
@@ -4057,24 +4808,27 @@ class AdminDashboardTab extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
               ],
               border: Border.all(
-                color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.transparent,
               ),
             ),
             child: Column(
-              crossAxisAlignment:
-                  fullWidth ? CrossAxisAlignment.start : CrossAxisAlignment.start,
+              crossAxisAlignment: fullWidth
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(icon, size: 28, color: color),
@@ -4142,7 +4896,7 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -4163,7 +4917,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                   hintStyle: GoogleFonts.inter(
                     color: Colors.grey,
                   ),
-                  prefixIcon: const Icon(Icons.search, color: Colors.indigoAccent),
+                  prefixIcon:
+                      const Icon(Icons.search, color: Colors.indigoAccent),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, color: Colors.grey),
@@ -4176,7 +4931,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                         )
                       : null,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 ),
               ),
             ),
@@ -4192,7 +4948,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                        Icon(Icons.error_outline,
+                            size: 48, color: Colors.red[300]),
                         const SizedBox(height: 16),
                         Text('Something went wrong',
                             style: GoogleFonts.inter(color: Colors.grey)),
@@ -4200,7 +4957,7 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                     ),
                   );
                 }
-                
+
                 if (!snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(color: Colors.indigo),
@@ -4211,9 +4968,10 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                 final allUsers = snapshot.data!;
                 final users = allUsers.where((user) {
                   final email = (user['email'] ?? '').toString().toLowerCase();
-                  final name = (user['full_name'] ?? '').toString().toLowerCase();
+                  final name =
+                      (user['full_name'] ?? '').toString().toLowerCase();
                   return email.contains(_searchQuery) ||
-                         name.contains(_searchQuery);
+                      name.contains(_searchQuery);
                 }).toList();
 
                 if (users.isEmpty) {
@@ -4221,16 +4979,15 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.search_off, size: 60, color: Colors.grey[400]),
+                        Icon(Icons.search_off,
+                            size: 60, color: Colors.grey[400]),
                         const SizedBox(height: 16),
                         Text(
-                          _searchQuery.isEmpty 
-                              ? 'No users found' 
+                          _searchQuery.isEmpty
+                              ? 'No users found'
                               : 'No matches found',
                           style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: Colors.grey[500]
-                          ),
+                              fontSize: 16, color: Colors.grey[500]),
                         ),
                       ],
                     ),
@@ -4264,17 +5021,20 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1E2336) : Colors.white,
+                          color:
+                              isDark ? const Color(0xFF1E2336) : Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.indigo.withOpacity(0.08),
+                              color: Colors.indigo.withValues(alpha: 0.08),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
                           ],
                           border: Border.all(
-                            color: isDark ? Colors.white10 : Colors.indigo.withOpacity(0.05),
+                            color: isDark
+                                ? Colors.white10
+                                : Colors.indigo.withValues(alpha: 0.05),
                           ),
                         ),
                         child: Material(
@@ -4312,7 +5072,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                         shape: BoxShape.circle,
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.indigo.withOpacity(0.4),
+                                            color:
+                                                Colors.indigo.withValues(alpha: 0.4),
                                             blurRadius: 10,
                                             offset: const Offset(0, 4),
                                           ),
@@ -4331,13 +5092,14 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                       ),
                                     ),
                                   ),
-                                  
+
                                   const SizedBox(width: 20),
-                                  
+
                                   // Info
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           fullName,
@@ -4354,13 +5116,15 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                           email,
                                           style: GoogleFonts.inter(
                                             fontSize: 13,
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         const SizedBox(height: 8),
-                                        
+
                                         // Credit Pill
                                         FutureBuilder(
                                           future: meterId != null
@@ -4373,27 +5137,34 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                           builder: (context, meterSnapshot) {
                                             double credit = 0.0;
                                             if (meterSnapshot.hasData) {
-                                              credit = double.tryParse(meterSnapshot
-                                                          .data!['current_credit']
-                                                          ?.toString() ??
-                                                      '0') ??
+                                              credit = double.tryParse(
+                                                      meterSnapshot.data![
+                                                                  'current_credit']
+                                                              ?.toString() ??
+                                                          '0') ??
                                                   0.0;
                                             }
-              
+
                                             return Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10, vertical: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4),
                                               decoration: BoxDecoration(
-                                                color: Colors.green.withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(8),
+                                                color: Colors.green
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                                 border: Border.all(
-                                                    color: Colors.green.withOpacity(0.2)),
+                                                    color: Colors.green
+                                                        .withValues(alpha: 0.2)),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   const Icon(
-                                                    Icons.account_balance_wallet,
+                                                    Icons
+                                                        .account_balance_wallet,
                                                     size: 14,
                                                     color: Colors.green,
                                                   ),
@@ -4401,7 +5172,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                                   Text(
                                                     '${credit.toStringAsFixed(2)} TZS',
                                                     style: GoogleFonts.inter(
-                                                      fontWeight: FontWeight.w600,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                       fontSize: 12,
                                                       color: Colors.green,
                                                     ),
@@ -4414,17 +5186,21 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
                                       ],
                                     ),
                                   ),
-                                  
+
                                   // Arrow
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.05)
+                                          : Colors.grey[100],
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
                                       Icons.chevron_right_rounded,
-                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
                                       size: 20,
                                     ),
                                   ),
@@ -4454,7 +5230,8 @@ class _AdminUsersTabState extends State<AdminUsersTab> {
         icon: const Icon(Icons.person_add_rounded, color: Colors.white),
         label: Text(
           'Add User',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white),
+          style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
     );
@@ -4486,12 +5263,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
     try {
       // Fetch all available meters
       final meters = await supabase.from('meters').select();
-      
+
       if (!mounted) return;
-      
+
       String? selectedMeterId = _currentMeterId;
       String searchQuery = '';
-      
+
       await showDialog(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -4501,9 +5278,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
               final meterId = meter['id'].toString().toLowerCase();
               final credit = meter['current_credit']?.toString() ?? '0';
               return meterId.contains(searchQuery.toLowerCase()) ||
-                     credit.contains(searchQuery);
+                  credit.contains(searchQuery);
             }).toList();
-            
+
             return AlertDialog(
               title: Text('Change Meter Assignment',
                   style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
@@ -4514,7 +5291,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                   children: [
                     Text(
                       'Select a meter to assign to this user',
-                      style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[600]),
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 16),
                     // Search bar
@@ -4557,7 +5335,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                               children: [
                                 // Option to remove meter
                                 RadioListTile<String?>(
-                                  title: const Text('No Meter (Remove Assignment)'),
+                                  title: const Text(
+                                      'No Meter (Remove Assignment)'),
                                   subtitle: Text(
                                     'User will have no meter assigned',
                                     style: GoogleFonts.inter(
@@ -4578,20 +5357,24 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                 ...filteredMeters.map((meter) {
                                   final meterId = meter['id'];
                                   final credit = double.tryParse(
-                                          meter['current_credit']?.toString() ?? '0') ??
+                                          meter['current_credit']?.toString() ??
+                                              '0') ??
                                       0.0;
-                                  final valveStatus = meter['valve_status'] == true;
-                                  
+                                  final valveStatus =
+                                      meter['valve_status'] == true;
+
                                   return RadioListTile<String>(
                                     title: Text(
-                                      meterId.toString().substring(0, 20) + '...',
+                                      meterId.toString().substring(0, 20) +
+                                          '...',
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13,
                                       ),
                                     ),
                                     subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Credit: ${credit.toStringAsFixed(2)} TZS',
@@ -4604,7 +5387,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           'Status: ${valveStatus ? "Open" : "Closed"}',
                                           style: GoogleFonts.inter(
                                             fontSize: 11,
-                                            color: valveStatus ? Colors.green : Colors.red,
+                                            color: valveStatus
+                                                ? Colors.green
+                                                : Colors.red,
                                           ),
                                         ),
                                       ],
@@ -4641,16 +5426,17 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 ElevatedButton(
                   onPressed: () async {
                     Navigator.pop(context);
-                    
+
                     try {
                       await supabase.from('profiles').update({
                         'meter_id': selectedMeterId,
                       }).eq('id', widget.userId);
-                      
+
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Meter assignment updated successfully!'),
+                            content:
+                                Text('Meter assignment updated successfully!'),
                             backgroundColor: Colors.green,
                           ),
                         );
@@ -4670,8 +5456,10 @@ class _UserDetailPageState extends State<UserDetailPage> {
                       }
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                  child: const Text('Update', style: TextStyle(color: Colors.white)),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  child: const Text('Update',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -4717,10 +5505,10 @@ class _UserDetailPageState extends State<UserDetailPage> {
     try {
       // Delete user profile (Supabase auth will cascade delete)
       await supabase.from('profiles').delete().eq('id', widget.userId);
-      
+
       // Try to delete auth user (requires service role key in production)
       // For now, just delete the profile which will prevent login
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -4786,10 +5574,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 });
 
                 final newCredit = currentCredit + amount;
-                await supabase
-                    .from('meters')
-                    .update({'current_credit': newCredit}).eq(
-                        'id', _currentMeterId!);
+                await supabase.from('meters').update(
+                    {'current_credit': newCredit}).eq('id', _currentMeterId!);
 
                 setState(() {});
                 if (mounted) {
@@ -4857,11 +5643,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
         ],
       ),
       body: FutureBuilder(
-        future: supabase
-            .from('profiles')
-            .select()
-            .eq('id', widget.userId)
-            .single(),
+        future:
+            supabase.from('profiles').select().eq('id', widget.userId).single(),
         builder: (context, userSnapshot) {
           if (!userSnapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -4888,8 +5671,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                         children: [
                           Text('User Information',
                               style: GoogleFonts.inter(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold)),
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
                           const Divider(),
                           ListTile(
                             contentPadding: EdgeInsets.zero,
@@ -4945,7 +5727,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                             height: 50,
                             child: ElevatedButton.icon(
                               onPressed: _changeMeter,
-                              icon: const Icon(Icons.add_circle_outline, size: 24),
+                              icon: const Icon(Icons.add_circle_outline,
+                                  size: 24),
                               label: Text(
                                 'Assign Meter',
                                 style: GoogleFonts.inter(
@@ -4973,7 +5756,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.blue[700], size: 24),
+                          Icon(Icons.info_outline,
+                              color: Colors.blue[700], size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -5009,8 +5793,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
                         meter['current_credit']?.toString() ?? '0') ??
                     0.0;
                 valveStatus = meter['valve_status'] == true;
-                velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
-                totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
+                velocity = double.tryParse(
+                        meter['current_reading']?.toString() ?? '0') ??
+                    0.0;
+                totalLiters =
+                    double.tryParse(meter['total_volume']?.toString() ?? '0') ??
+                        0.0;
               }
 
               return SingleChildScrollView(
@@ -5027,8 +5815,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           children: [
                             Text('User Information',
                                 style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 20, fontWeight: FontWeight.bold)),
                             const Divider(),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
@@ -5113,20 +5900,23 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           children: [
                             Text('Sensor Real-time Data',
                                 style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 20, fontWeight: FontWeight.bold)),
                             const Divider(),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.speed, color: Colors.blue),
+                              leading:
+                                  const Icon(Icons.speed, color: Colors.blue),
                               title: const Text('Flow Velocity'),
-                              subtitle: Text('${velocity.toStringAsFixed(2)} L/min'),
+                              subtitle:
+                                  Text('${velocity.toStringAsFixed(2)} L/min'),
                             ),
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.gas_meter, color: Colors.orange),
+                              leading: const Icon(Icons.gas_meter,
+                                  color: Colors.orange),
                               title: const Text('Total Gas Amount'),
-                              subtitle: Text('${totalLiters.toStringAsFixed(2)} Liters'),
+                              subtitle: Text(
+                                  '${totalLiters.toStringAsFixed(2)} Liters'),
                             ),
                           ],
                         ),
@@ -5141,8 +5931,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           children: [
                             Text('Valve Control',
                                 style: GoogleFonts.inter(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 20, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 16),
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
@@ -5308,7 +6097,8 @@ class _RegisterUserPageState extends State<RegisterUserPage> {
                 ),
                 child: loading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Register User', style: TextStyle(fontSize: 16)),
+                    : const Text('Register User',
+                        style: TextStyle(fontSize: 16)),
               ),
             ),
           ],
@@ -5349,8 +6139,12 @@ class AdminMetersTab extends StatelessWidget {
               final currentCredit =
                   double.tryParse(meter['current_credit']?.toString() ?? '0') ??
                       0.0;
-              final velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
-              final totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
+              final velocity = double.tryParse(
+                      meter['current_reading']?.toString() ?? '0') ??
+                  0.0;
+              final totalLiters =
+                  double.tryParse(meter['total_volume']?.toString() ?? '0') ??
+                      0.0;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -5378,7 +6172,8 @@ class AdminMetersTab extends StatelessWidget {
                       ),
                       Text(
                         'Velocity: ${velocity.toStringAsFixed(2)} L/min | Total: ${totalLiters.toStringAsFixed(1)} L',
-                        style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+                        style:
+                            GoogleFonts.inter(fontSize: 12, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -5430,8 +6225,9 @@ class MeterDetailPage extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder(
-        stream:
-            supabase.from('meters').stream(primaryKey: ['id']).eq('id', meterId),
+        stream: supabase
+            .from('meters')
+            .stream(primaryKey: ['id']).eq('id', meterId),
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: CircularProgressIndicator());
@@ -5440,11 +6236,15 @@ class MeterDetailPage extends StatelessWidget {
           final meter = snapshot.data![0];
           final valveStatus = meter['valve_status'] == true;
           final currentCredit =
-              double.tryParse(meter['current_credit']?.toString() ?? '0') ?? 0.0;
+              double.tryParse(meter['current_credit']?.toString() ?? '0') ??
+                  0.0;
           final usageRate =
               double.tryParse(meter['usage_rate']?.toString() ?? '0') ?? 0.0;
-          final velocity = double.tryParse(meter['current_reading']?.toString() ?? '0') ?? 0.0;
-          final totalLiters = double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
+          final velocity =
+              double.tryParse(meter['current_reading']?.toString() ?? '0') ??
+                  0.0;
+          final totalLiters =
+              double.tryParse(meter['total_volume']?.toString() ?? '0') ?? 0.0;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -5492,20 +6292,24 @@ class MeterDetailPage extends StatelessWidget {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Usage Rate'),
-                          subtitle: Text('${usageRate.toStringAsFixed(2)} TZS/m³'),
+                          subtitle:
+                              Text('${usageRate.toStringAsFixed(2)} TZS/m³'),
                         ),
                         const Divider(),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Real-time Velocity'),
-                          subtitle: Text('${velocity.toStringAsFixed(2)} L/min'),
+                          subtitle:
+                              Text('${velocity.toStringAsFixed(2)} L/min'),
                           leading: const Icon(Icons.speed, color: Colors.blue),
                         ),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Total Gas Amount'),
-                          subtitle: Text('${totalLiters.toStringAsFixed(2)} Liters'),
-                          leading: const Icon(Icons.gas_meter, color: Colors.orange),
+                          subtitle:
+                              Text('${totalLiters.toStringAsFixed(2)} Liters'),
+                          leading:
+                              const Icon(Icons.gas_meter, color: Colors.orange),
                         ),
                       ],
                     ),
@@ -5599,7 +6403,8 @@ class _RegisterMeterPageState extends State<RegisterMeterPage> {
           children: [
             Text(
               'Assign meter to user:',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+              style:
+                  GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             StreamBuilder(
@@ -5643,7 +6448,8 @@ class _RegisterMeterPageState extends State<RegisterMeterPage> {
                 ),
                 child: loading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Register Meter', style: TextStyle(fontSize: 16)),
+                    : const Text('Register Meter',
+                        style: TextStyle(fontSize: 16)),
               ),
             ),
           ],
@@ -5676,7 +6482,8 @@ class AdminSettingsTab extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.person),
                   title: const Text('Account Information'),
-                  subtitle: Text(supabase.auth.currentUser?.email ?? 'No email'),
+                  subtitle:
+                      Text(supabase.auth.currentUser?.email ?? 'No email'),
                   trailing: const Icon(Icons.chevron_right),
                 ),
                 const Divider(),

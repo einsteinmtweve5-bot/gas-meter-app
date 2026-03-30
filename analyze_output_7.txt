@@ -1,0 +1,35 @@
+Analyzing gas_meter_app...                                      
+
+   info • Don't invoke 'print' in production code • lib/main.dart:41:3 • avoid_print
+   info • The local variable '_resetGasUsage' starts with an underscore • lib/main.dart:878:18 • no_leading_underscores_for_local_identifiers
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:889:13 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:890:24 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:898:13 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:899:24 • prefer_const_constructors
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:1953:63 • deprecated_member_use
+   info • 'swapAnimationDuration' is deprecated and shouldn't be used. Please use [duration] instead • lib/main.dart:2091:33 • deprecated_member_use
+   info • 'swapAnimationCurve' is deprecated and shouldn't be used. Please use [curve] instead • lib/main.dart:2093:33 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/main.dart:2971:7 • curly_braces_in_flow_control_structures
+   info • Use interpolation to compose strings and values • lib/main.dart:2984:36 • prefer_interpolation_to_compose_strings
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:3272:26 • prefer_const_constructors
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:3275:29 • prefer_const_literals_to_create_immutables
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:3551:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:3919:51 • deprecated_member_use
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:4481:21 • prefer_const_literals_to_create_immutables
+   info • Unnecessary use of string interpolation • lib/main.dart:4600:31 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/main.dart:4611:31 • unnecessary_string_interpolations
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:4953:52 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:5224:35 • prefer_const_constructors
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5272:35 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5273:35 • deprecated_member_use
+   info • Use interpolation to compose strings and values • lib/main.dart:5292:39 • prefer_interpolation_to_compose_strings
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5322:37 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5323:37 • deprecated_member_use
+   info • Unnecessary use of 'toList' in a spread • lib/main.dart:5329:36 • unnecessary_to_list_in_spreads
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6001:15 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6348:19 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6424:17 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6431:17 • prefer_const_constructors
+   info • The constant name 'TZS_PER_LITER' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:9:23 • constant_identifier_names
+   info • The constant name 'LAST_VOLUME_KEY' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:10:23 • constant_identifier_names
+
