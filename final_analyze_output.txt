@@ -1,0 +1,399 @@
+Analyzing gas_meter_app...                                      
+
+  error • The argument type 'CardTheme' can't be assigned to the parameter type 'CardThemeData?'.  • lib/main.dart:121:16 • argument_type_not_assignable
+  error • The name 'AdminDashboardTab' isn't a class • lib/main.dart:574:15 • creation_with_non_type
+  error • The name 'AdminUsersTab' isn't a class • lib/main.dart:575:15 • creation_with_non_type
+  error • The name 'AdminMetersTab' isn't a class • lib/main.dart:576:15 • creation_with_non_type
+  error • The name 'AdminSettingsTab' isn't a class • lib/main.dart:577:15 • creation_with_non_type
+  error • The method 'ReportsPage' isn't defined for the type '_HomeScreenState' • lib/main.dart:619:7 • undefined_method
+  error • The name 'AlertsPage' isn't a class • lib/main.dart:620:13 • creation_with_non_type
+  error • The name 'SettingsPage' isn't a class • lib/main.dart:623:13 • creation_with_non_type
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:664:35 • deprecated_member_use
+  error • Missing concrete implementation of 'StatefulWidget.createState' • lib/main.dart:686:7 • non_abstract_class_inherits_abstract_member
+  error • Classes can't be declared inside other classes • lib/main.dart:689:1 • class_in_class
+  error • Expected a class member • lib/main.dart:689:27 • expected_class_member
+   info • The variable name 'State' isn't a lowerCamelCase identifier • lib/main.dart:689:35 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:689:35 • missing_method_parameters
+   info • The type parameter name 'DashboardPage' matches a visible type name • lib/main.dart:689:41 • avoid_types_as_parameter_names
+  error • A function body must be provided • lib/main.dart:689:56 • missing_function_body
+  error • Expected a class member • lib/main.dart:689:56 • expected_class_member
+   info • The variable name 'SingleTickerProviderStateMixin' isn't a lowerCamelCase identifier • lib/main.dart:689:61 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:689:61 • missing_method_parameters
+   info • The local variable '_localValveStatus' starts with an underscore • lib/main.dart:692:9 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_isLoadingMeterId' starts with an underscore • lib/main.dart:693:8 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_meterService' starts with an underscore • lib/main.dart:694:17 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_audioPlayer' starts with an underscore • lib/main.dart:695:21 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_isPlayingAlert' starts with an underscore • lib/main.dart:696:8 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_pulseController' starts with an underscore • lib/main.dart:697:28 • no_leading_underscores_for_local_identifiers
+warning • The declaration 'initState' isn't referenced • lib/main.dart:700:8 • unused_element
+  error • The method 'initState' isn't defined in a superclass of 'DashboardPage' • lib/main.dart:701:11 • undefined_super_member
+  error • Local variable '_loadUserMeterId' can't be referenced before it is declared • lib/main.dart:702:5 • referenced_before_declaration
+  error • The argument type 'DashboardPage' can't be assigned to the parameter type 'TickerProvider'.  • lib/main.dart:704:14 • argument_type_not_assignable
+warning • The declaration 'dispose' isn't referenced • lib/main.dart:710:8 • unused_element
+  error • The method 'dispose' isn't defined in a superclass of 'DashboardPage' • lib/main.dart:714:11 • undefined_super_member
+   info • The local variable '_loadUserMeterId' starts with an underscore • lib/main.dart:717:16 • no_leading_underscores_for_local_identifiers
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:723:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:730:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:734:7 • undefined_method
+   info • The local variable '_toggleValve' starts with an underscore • lib/main.dart:743:16 • no_leading_underscores_for_local_identifiers
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:745:5 • undefined_method
+warning • The declaration 'build' isn't referenced • lib/main.dart:752:10 • unused_element
+  error • Local variable '_buildNoMeterState' can't be referenced before it is declared • lib/main.dart:754:33 • referenced_before_declaration
+  error • Local variable '_buildHeader' can't be referenced before it is declared • lib/main.dart:785:41 • referenced_before_declaration
+  error • Local variable '_buildLeakAlert' can't be referenced before it is declared • lib/main.dart:786:59 • referenced_before_declaration
+  error • 1 positional argument expected by '_buildLeakAlert', but 0 found • lib/main.dart:786:75 • not_enough_positional_arguments
+  error • Local variable '_buildCreditCard' can't be referenced before it is declared • lib/main.dart:791:21 • referenced_before_declaration
+  error • Local variable '_buildValveControls' can't be referenced before it is declared • lib/main.dart:793:21 • referenced_before_declaration
+  error • Local variable '_buildFlowGauge' can't be referenced before it is declared • lib/main.dart:795:21 • referenced_before_declaration
+   info • The local variable '_buildHeader' starts with an underscore • lib/main.dart:807:10 • no_leading_underscores_for_local_identifiers
+  error • Undefined name 'context' • lib/main.dart:809:51 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:816:53 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:817:61 • undefined_identifier
+   info • The local variable '_buildCreditCard' starts with an underscore • lib/main.dart:840:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildValveControls' starts with an underscore • lib/main.dart:871:10 • no_leading_underscores_for_local_identifiers
+  error • Local variable '_buildValveButton' can't be referenced before it is declared • lib/main.dart:874:25 • referenced_before_declaration
+  error • Local variable '_buildValveButton' can't be referenced before it is declared • lib/main.dart:882:25 • referenced_before_declaration
+   info • The local variable '_buildValveButton' starts with an underscore • lib/main.dart:893:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildFlowGauge' starts with an underscore • lib/main.dart:921:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildNoMeterState' starts with an underscore • lib/main.dart:963:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildLeakAlert' starts with an underscore • lib/main.dart:967:10 • no_leading_underscores_for_local_identifiers
+  error • Classes can't be declared inside other classes • lib/main.dart:1026:1 • class_in_class
+  error • Expected a class member • lib/main.dart:1026:19 • expected_class_member
+   info • The variable name 'StatefulWidget' isn't a lowerCamelCase identifier • lib/main.dart:1026:27 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:1026:27 • missing_method_parameters
+warning • The value of the local variable 'isOffline' isn't used • lib/main.dart:1027:14 • unused_local_variable
+  error • The name 'ReportsPage' isn't a class • lib/main.dart:1028:9 • creation_with_non_type
+  error • 'isOffline' can't be used as a setter because it's final • lib/main.dart:1028:38 • assignment_to_final
+  error • State isn't a type • lib/main.dart:1031:3 • not_a_type
+  error • The name 'ReportsPage' isn't a type, so it can't be used as a type argument • lib/main.dart:1031:9 • non_type_as_type_argument
+warning • The declaration 'createState' isn't referenced • lib/main.dart:1031:22 • unused_element
+  error • The method '_ReportsPageState' isn't defined for the type 'DashboardPage' • lib/main.dart:1031:39 • undefined_method
+  error • Classes can't be declared inside other classes • lib/main.dart:1034:1 • class_in_class
+  error • Expected a class member • lib/main.dart:1034:25 • expected_class_member
+   info • The variable name 'State' isn't a lowerCamelCase identifier • lib/main.dart:1034:33 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:1034:33 • missing_method_parameters
+  error • The name 'State' is already defined • lib/main.dart:1034:33 • duplicate_definition
+   info • The local variable '_isLoadingMeterId' starts with an underscore • lib/main.dart:1036:8 • no_leading_underscores_for_local_identifiers
+warning • The declaration 'initState' isn't referenced • lib/main.dart:1039:8 • unused_element
+  error • The method 'initState' isn't defined in a superclass of 'DashboardPage' • lib/main.dart:1040:11 • undefined_super_member
+  error • Local variable '_loadUserMeterId' can't be referenced before it is declared • lib/main.dart:1041:5 • referenced_before_declaration
+   info • The local variable '_loadUserMeterId' starts with an underscore • lib/main.dart:1044:16 • no_leading_underscores_for_local_identifiers
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1050:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1055:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1059:7 • undefined_method
+warning • The declaration 'build' isn't referenced • lib/main.dart:1067:10 • unused_element
+  error • Local variable '_buildHeader' can't be referenced before it is declared • lib/main.dart:1083:41 • referenced_before_declaration
+  error • Local variable '_buildChartSection' can't be referenced before it is declared • lib/main.dart:1088:21 • referenced_before_declaration
+  error • Local variable '_buildLineChart' can't be referenced before it is declared • lib/main.dart:1091:30 • referenced_before_declaration
+  error • Local variable '_buildChartSection' can't be referenced before it is declared • lib/main.dart:1094:21 • referenced_before_declaration
+  error • Local variable '_buildBarChart' can't be referenced before it is declared • lib/main.dart:1097:30 • referenced_before_declaration
+   info • The local variable '_buildHeader' starts with an underscore • lib/main.dart:1110:10 • no_leading_underscores_for_local_identifiers
+  error • Undefined name 'context' • lib/main.dart:1112:51 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:1116:45 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:1117:55 • undefined_identifier
+   info • The local variable '_buildChartSection' starts with an underscore • lib/main.dart:1141:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildLineChart' starts with an underscore • lib/main.dart:1157:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_buildBarChart' starts with an underscore • lib/main.dart:1178:10 • no_leading_underscores_for_local_identifiers
+  error • Classes can't be declared inside other classes • lib/main.dart:1194:1 • class_in_class
+  error • Expected a class member • lib/main.dart:1194:18 • expected_class_member
+   info • The variable name 'StatefulWidget' isn't a lowerCamelCase identifier • lib/main.dart:1194:26 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:1194:26 • missing_method_parameters
+  error • The name 'StatefulWidget' is already defined • lib/main.dart:1194:26 • duplicate_definition
+warning • The value of the local variable 'isOffline' isn't used • lib/main.dart:1195:14 • unused_local_variable
+  error • The name 'AlertsPage' isn't a class • lib/main.dart:1196:9 • creation_with_non_type
+  error • 'isOffline' can't be used as a setter because it's final • lib/main.dart:1196:37 • assignment_to_final
+  error • State isn't a type • lib/main.dart:1199:3 • not_a_type
+  error • The name 'AlertsPage' isn't a type, so it can't be used as a type argument • lib/main.dart:1199:9 • non_type_as_type_argument
+warning • The declaration 'createState' isn't referenced • lib/main.dart:1199:21 • unused_element
+  error • The method '_AlertsPageState' isn't defined for the type 'DashboardPage' • lib/main.dart:1199:38 • undefined_method
+  error • Classes can't be declared inside other classes • lib/main.dart:1202:1 • class_in_class
+  error • Expected a class member • lib/main.dart:1202:24 • expected_class_member
+   info • The variable name 'State' isn't a lowerCamelCase identifier • lib/main.dart:1202:32 • non_constant_identifier_names
+  error • Methods must have an explicit list of parameters • lib/main.dart:1202:32 • missing_method_parameters
+  error • The name 'State' is already defined • lib/main.dart:1202:32 • duplicate_definition
+   info • The local variable '_isLoadingMeterId' starts with an underscore • lib/main.dart:1204:8 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_selectedCategory' starts with an underscore • lib/main.dart:1205:10 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_searchController' starts with an underscore • lib/main.dart:1206:31 • no_leading_underscores_for_local_identifiers
+   info • The local variable '_categories' starts with an underscore • lib/main.dart:1208:22 • no_leading_underscores_for_local_identifiers
+warning • The declaration 'initState' isn't referenced • lib/main.dart:1211:8 • unused_element
+  error • The method 'initState' isn't defined in a superclass of 'DashboardPage' • lib/main.dart:1212:11 • undefined_super_member
+  error • Local variable '_loadUserMeterId' can't be referenced before it is declared • lib/main.dart:1213:5 • referenced_before_declaration
+   info • The local variable '_loadUserMeterId' starts with an underscore • lib/main.dart:1216:16 • no_leading_underscores_for_local_identifiers
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1222:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1227:9 • undefined_method
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1231:7 • undefined_method
+warning • The declaration 'build' isn't referenced • lib/main.dart:1239:10 • unused_element
+  error • Local variable '_buildHeader' can't be referenced before it is declared • lib/main.dart:1247:37 • referenced_before_declaration
+  error • Local variable '_buildFilters' can't be referenced before it is declared • lib/main.dart:1248:37 • referenced_before_declaration
+  error • Local variable '_buildAlertItem' can't be referenced before it is declared • lib/main.dart:1266:41 • referenced_before_declaration
+   info • The local variable '_buildHeader' starts with an underscore • lib/main.dart:1279:10 • no_leading_underscores_for_local_identifiers
+  error • Undefined name 'context' • lib/main.dart:1281:51 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:1285:44 • undefined_identifier
+  error • Undefined name 'context' • lib/main.dart:1286:50 • undefined_identifier
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1304:33 • undefined_method
+   info • The local variable '_buildFilters' starts with an underscore • lib/main.dart:1312:10 • no_leading_underscores_for_local_identifiers
+  error • The method 'setState' isn't defined for the type 'DashboardPage' • lib/main.dart:1324:34 • undefined_method
+  error • The named parameter 'borderSide' isn't defined • lib/main.dart:1327:86 • undefined_named_parameter
+   info • The local variable '_buildAlertItem' starts with an underscore • lib/main.dart:1336:10 • no_leading_underscores_for_local_identifiers
+  error • The getter 'warning' isn't defined for the type 'FluxGuardColors' • lib/main.dart:1348:31 • undefined_getter
+warning • The declaration '_deleteSession' isn't referenced • lib/main.dart:1576:8 • unused_element
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1834:19 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1845:29 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1847:30 • prefer_const_constructors
+  error • Undefined name '_isLoadingMeterId' • lib/main.dart:1905:9 • undefined_identifier
+  error • The function '_createNewSession' isn't defined • lib/main.dart:1969:17 • undefined_function
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1977:26 • prefer_const_constructors
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:1980:29 • prefer_const_literals_to_create_immutables
+  error • Undefined name '_sessions' • lib/main.dart:1992:30 • undefined_identifier
+  error • Undefined name '_sessions' • lib/main.dart:1994:37 • undefined_identifier
+  error • Undefined name '_currentSessionIndex' • lib/main.dart:1995:40 • undefined_identifier
+  error • The function '_deleteSession' isn't defined • lib/main.dart:2031:44 • undefined_function
+  error • The function 'setState' isn't defined • lib/main.dart:2034:27 • undefined_function
+  error • Undefined name '_currentSessionIndex' • lib/main.dart:2035:29 • undefined_identifier
+  error • Undefined name '_scrollController' • lib/main.dart:2052:27 • undefined_identifier
+  error • Undefined name '_messages' • lib/main.dart:2111:37 • undefined_identifier
+  error • Undefined name '_messages' • lib/main.dart:2116:35 • undefined_identifier
+  error • Undefined name '_loading' • lib/main.dart:2120:21 • undefined_identifier
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2320:1 • expected_identifier_but_got_keyword
+  error • Undefined name 'class' • lib/main.dart:2320:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2320:7 • expected_token
+  error • Undefined name 'SettingsPage' • lib/main.dart:2320:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2320:20 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2320:20 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2320:20 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2320:28 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2320:28 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2320:43 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2320:43 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:2321:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2321:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2328:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2328:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2328:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2328:7 • expected_token
+  error • Undefined name '_SettingsPageState' • lib/main.dart:2328:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2328:26 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2328:26 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2328:26 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2328:34 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2328:39 • undefined_operator
+  error • Undefined name 'SettingsPage' • lib/main.dart:2328:40 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2328:52 • equality_cannot_be_equality_operand
+  error • Expected to find ',' • lib/main.dart:2329:10 • expected_token
+  error • Undefined name 'userName' • lib/main.dart:2329:10 • undefined_identifier
+  error • Expected to find '}' • lib/main.dart:2329:32 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2443:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2443:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2443:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2443:7 • expected_token
+  error • Undefined name 'AdminPage' • lib/main.dart:2443:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2443:17 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2443:17 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2443:17 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2443:25 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2443:25 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2443:40 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2443:40 • list_element_type_not_assignable
+  error • The name 'AdminPage' isn't a class • lib/main.dart:2444:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2444:20 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2444:31 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2450:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2450:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2450:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2450:7 • expected_token
+  error • Undefined name '_AdminPageState' • lib/main.dart:2450:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2450:23 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2450:23 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2450:23 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2450:31 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2450:36 • undefined_operator
+  error • Undefined name 'AdminPage' • lib/main.dart:2450:37 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2450:46 • equality_cannot_be_equality_operand
+  error • 'with' can't be used as an identifier because it's a keyword • lib/main.dart:2451:5 • expected_identifier_but_got_keyword
+  error • Undefined name 'with' • lib/main.dart:2451:5 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2451:10 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2451:10 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2451:41 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2451:41 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:2452:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2452:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2640:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2640:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2640:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2640:7 • expected_token
+  error • Undefined name 'AdminDashboardTab' • lib/main.dart:2640:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2640:25 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2640:25 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2640:25 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2640:33 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2640:33 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2640:49 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2640:49 • list_element_type_not_assignable
+  error • The name 'AdminDashboardTab' isn't a class • lib/main.dart:2641:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2641:28 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2641:39 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2934:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2934:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2934:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2934:7 • expected_token
+  error • Undefined name 'AdminUsersTab' • lib/main.dart:2934:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2934:21 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2934:21 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2934:21 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2934:29 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2934:29 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2934:44 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2934:44 • list_element_type_not_assignable
+  error • The name 'AdminUsersTab' isn't a class • lib/main.dart:2935:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2935:24 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2935:35 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2941:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2941:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2941:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2941:7 • expected_token
+  error • Undefined name '_AdminUsersTabState' • lib/main.dart:2941:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2941:27 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2941:27 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2941:27 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2941:35 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2941:40 • undefined_operator
+  error • Undefined name 'AdminUsersTab' • lib/main.dart:2941:41 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2941:54 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:2942:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2942:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:3312:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3312:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:3312:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3312:7 • expected_token
+  error • Undefined name 'UserDetailPage' • lib/main.dart:3312:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:3312:22 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3312:22 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:3312:22 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3312:30 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:3312:30 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:3312:45 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:3312:45 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:3313:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:3313:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:3322:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3322:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:3322:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3322:7 • expected_token
+  error • Undefined name '_UserDetailPageState' • lib/main.dart:3322:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:3322:28 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3322:28 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:3322:28 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3322:36 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:3322:41 • undefined_operator
+  error • Undefined name 'UserDetailPage' • lib/main.dart:3322:42 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:3322:56 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:3323:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:3323:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4036:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4036:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4036:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4036:7 • expected_token
+  error • Undefined name 'RegisterUserPage' • lib/main.dart:4036:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4036:24 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4036:24 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4036:24 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4036:32 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4036:32 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4036:47 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4036:47 • list_element_type_not_assignable
+  error • The name 'RegisterUserPage' isn't a class • lib/main.dart:4037:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4037:27 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4037:38 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4043:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4043:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4043:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4043:7 • expected_token
+  error • Undefined name '_RegisterUserPageState' • lib/main.dart:4043:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4043:30 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4043:30 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4043:30 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4043:38 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:4043:43 • undefined_operator
+  error • Undefined name 'RegisterUserPage' • lib/main.dart:4043:44 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:4043:60 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:4044:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4044:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4181:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4181:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4181:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4181:7 • expected_token
+  error • Undefined name 'AdminMetersTab' • lib/main.dart:4181:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4181:22 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4181:22 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4181:22 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4181:30 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4181:30 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4181:46 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4181:46 • list_element_type_not_assignable
+  error • The name 'AdminMetersTab' isn't a class • lib/main.dart:4182:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4182:25 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4182:36 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4280:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4280:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4280:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4280:7 • expected_token
+  error • Undefined name 'MeterDetailPage' • lib/main.dart:4280:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4280:23 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4280:23 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4280:23 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4280:31 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4280:31 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4280:47 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4280:47 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:4281:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4281:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4397:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4397:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4397:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4397:7 • expected_token
+  error • Undefined name 'RegisterMeterPage' • lib/main.dart:4397:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4397:25 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4397:25 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4397:25 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4397:33 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4397:33 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4397:48 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4397:48 • list_element_type_not_assignable
+  error • The name 'RegisterMeterPage' isn't a class • lib/main.dart:4398:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4398:28 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4398:39 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4404:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4404:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4404:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4404:7 • expected_token
+  error • Undefined name '_RegisterMeterPageState' • lib/main.dart:4404:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4404:31 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4404:31 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4404:31 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4404:39 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:4404:44 • undefined_operator
+  error • Undefined name 'RegisterMeterPage' • lib/main.dart:4404:45 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:4404:62 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:4405:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4405:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4532:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4532:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4532:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4532:7 • expected_token
+  error • Undefined name 'AdminSettingsTab' • lib/main.dart:4532:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4532:24 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4532:24 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4532:24 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4532:32 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4532:32 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4532:48 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4532:48 • list_element_type_not_assignable
+  error • The name 'AdminSettingsTab' isn't a class • lib/main.dart:4533:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4533:27 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4533:38 • expected_token
+  error • Expected to find ';' • lib/main.dart:4608:1 • expected_token
+  error • Expected to find ')' • lib/main.dart:4609:1 • expected_token
+  error • Expected to find ']' • lib/main.dart:4609:1 • expected_token
+  error • Expected to find '}' • lib/main.dart:4609:1 • expected_token
+
+395 issues found. (ran in 3.1s)

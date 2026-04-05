@@ -1,0 +1,20 @@
+Analyzing gas_meter_app...                                      
+
+warning • Unused import: 'package:vibration/vibration.dart' • lib/main.dart:15:8 • unused_import
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:666:35 • deprecated_member_use
+warning • The declaration '_deleteSession' isn't referenced • lib/main.dart:1582:8 • unused_element
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1840:19 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1851:29 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1853:30 • prefer_const_constructors
+   info • 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre • lib/main.dart:2010:85 • deprecated_member_use
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:2213:21 • prefer_const_literals_to_create_immutables
+   info • Unnecessary use of string interpolation • lib/main.dart:2332:31 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/main.dart:2342:31 • unnecessary_string_interpolations
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:2955:35 • prefer_const_constructors
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:3003:35 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:3004:35 • deprecated_member_use
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:3052:37 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:3053:37 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:3731:17 • deprecated_member_use
+
+16 issues found. (ran in 3.0s)

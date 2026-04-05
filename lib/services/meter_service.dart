@@ -2,12 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'notification_service.dart';
 
 /// Service to manage credit reduction based on gas consumption
 /// Logic: 0.1 Liters = 5 TZS, which means 1 Liter = 50 TZS
 class MeterService extends ChangeNotifier {
-  static const double TZS_PER_LITER = 50.0; // 0.1L = 5 TZS => 1L = 50 TZS
-  static const String LAST_VOLUME_KEY = 'last_processed_volume';
+  static const double tzsPerLiter = 50.0; // 0.1L = 5 TZS => 1L = 50 TZS
+  static const String lastVolumeKey = 'last_processed_volume';
   
   final String meterId;
   StreamSubscription? _meterSubscription;
@@ -19,6 +20,8 @@ class MeterService extends ChangeNotifier {
   
   double get currentCredit => _currentCredit;
   double get totalVolume => _totalVolume;
+  double get currentFlow => _currentFlow;
+  double _currentFlow = 0.0;
   String get currency => 'TZS';
   bool get isInitialized => _isInitialized;
   
@@ -30,7 +33,7 @@ class MeterService extends ChangeNotifier {
     try {
       // Load last processed volume from local storage
       final prefs = await SharedPreferences.getInstance();
-      _lastProcessedVolume = prefs.getDouble(LAST_VOLUME_KEY) ?? 0.0;
+      _lastProcessedVolume = prefs.getDouble(lastVolumeKey) ?? 0.0;
       
       // Start listening to meter updates
       _startListening();
@@ -59,6 +62,8 @@ class MeterService extends ChangeNotifier {
       final newCredit = double.tryParse(meterData['current_credit']?.toString() ?? '0') ?? 0.0;
       final newVolume = double.tryParse(meterData['total_volume']?.toString() ?? '0') ?? 0.0;
       
+      _currentFlow = double.tryParse(meterData['current_flow']?.toString() ?? '0.0') ?? 0.0;
+      
       // On first update, just store values without processing
       if (!_isInitialized) {
         _currentCredit = newCredit;
@@ -82,7 +87,7 @@ class MeterService extends ChangeNotifier {
       // Only process if there's a positive volume increase
       if (volumeDelta > 0.0) {
         // Calculate cost in TZS
-        final cost = volumeDelta * TZS_PER_LITER;
+        final cost = volumeDelta * tzsPerLiter;
         
         // Calculate new credit (ensure it doesn't go below 0)
         final updatedCredit = (newCredit - cost).clamp(0.0, double.infinity);
@@ -109,6 +114,14 @@ class MeterService extends ChangeNotifier {
         _totalVolume = newVolume;
         notifyListeners();
       }
+
+      // Check for gas leak and notify via system notifications
+      // This works even if the app is in background
+      if (meterData['gas_leak'] == true && (newVolume > 0.0)) {
+        // Use a static call to show the alert
+        // We can import it at the top of the file
+        await NotificationService.showLeakAlert();
+      }
     } catch (e) {
       debugPrint('MeterService update error: $e');
     }
@@ -130,7 +143,7 @@ class MeterService extends ChangeNotifier {
   Future<void> _saveLastProcessedVolume() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble(LAST_VOLUME_KEY, _lastProcessedVolume);
+      await prefs.setDouble(lastVolumeKey, _lastProcessedVolume);
     } catch (e) {
       debugPrint('MeterService save volume error: $e');
     }

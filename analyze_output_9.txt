@@ -1,0 +1,61 @@
+Analyzing gas_meter_app...                                      
+
+   info • Don't invoke 'print' in production code • lib/main.dart:44:3 • avoid_print
+   info • The local variable '_resetGasUsage' starts with an underscore • lib/main.dart:882:18 • no_leading_underscores_for_local_identifiers
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:893:13 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:894:24 • prefer_const_constructors
+   info • 'swapAnimationDuration' is deprecated and shouldn't be used. Please use [duration] instead • lib/main.dart:2105:33 • deprecated_member_use
+   info • 'swapAnimationCurve' is deprecated and shouldn't be used. Please use [curve] instead • lib/main.dart:2107:33 • deprecated_member_use
+  error • Expected to find '(' • lib/main.dart:2838:17 • expected_token
+  error • The name 'DarwinNotificationDetails' isn't a class • lib/main.dart:2838:17 • creation_with_non_type
+  error • Expected to find ',' • lib/main.dart:2838:43 • expected_token
+  error • Undefined name 'iOSPlatformChannelSpecifics' • lib/main.dart:2838:43 • undefined_identifier
+  error • The method 'DarwinNotificationDetails' isn't defined for the type '_TopUpPageState' • lib/main.dart:2839:9 • undefined_method
+  error • Expected to find ')' • lib/main.dart:2844:6 • expected_token
+  error • Expected to find ']' • lib/main.dart:2844:6 • expected_token
+  error • Expected to find ';' • lib/main.dart:2851:11 • expected_token
+warning • Dead code • lib/main.dart:2851:12 • dead_code
+  error • Expected an identifier • lib/main.dart:2851:12 • missing_identifier
+  error • Unexpected text ';' • lib/main.dart:2851:12 • unexpected_token
+  error • Expected to find ';' • lib/main.dart:2899:11 • expected_token
+  error • Expected an identifier • lib/main.dart:2899:12 • missing_identifier
+  error • Expected to find ';' • lib/main.dart:2899:12 • expected_token
+  error • Unexpected text ';' • lib/main.dart:2899:12 • unexpected_token
+  error • Expected an identifier • lib/main.dart:2900:9 • missing_identifier
+  error • Expected to find ';' • lib/main.dart:2900:9 • expected_token
+  error • Unexpected text ';' • lib/main.dart:2900:9 • unexpected_token
+  error • Expected an identifier • lib/main.dart:2900:10 • missing_identifier
+  error • Expected to find ';' • lib/main.dart:2900:10 • expected_token
+  error • Unexpected text ';' • lib/main.dart:2900:10 • unexpected_token
+  error • Expected an identifier • lib/main.dart:2901:7 • missing_identifier
+  error • Expected to find ';' • lib/main.dart:2901:7 • expected_token
+  error • Unexpected text ';' • lib/main.dart:2901:7 • unexpected_token
+  error • Expected an identifier • lib/main.dart:2901:8 • missing_identifier
+  error • Expected to find ';' • lib/main.dart:2901:8 • expected_token
+  error • Unexpected text ';' • lib/main.dart:2901:8 • unexpected_token
+  error • Expected an identifier • lib/main.dart:2902:5 • missing_identifier
+  error • Unexpected text ';' • lib/main.dart:2902:5 • unexpected_token
+   info • Unnecessary empty statement • lib/main.dart:2902:6 • empty_statements
+   info • Statements in an if should be enclosed in a block • lib/main.dart:2986:7 • curly_braces_in_flow_control_structures
+   info • Use interpolation to compose strings and values • lib/main.dart:2999:36 • prefer_interpolation_to_compose_strings
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:3287:26 • prefer_const_constructors
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:3290:29 • prefer_const_literals_to_create_immutables
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:4496:21 • prefer_const_literals_to_create_immutables
+   info • Unnecessary use of string interpolation • lib/main.dart:4615:31 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/main.dart:4626:31 • unnecessary_string_interpolations
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:5239:35 • prefer_const_constructors
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5287:35 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5288:35 • deprecated_member_use
+   info • Use interpolation to compose strings and values • lib/main.dart:5307:39 • prefer_interpolation_to_compose_strings
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5337:37 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5338:37 • deprecated_member_use
+   info • Unnecessary use of 'toList' in a spread • lib/main.dart:5344:36 • unnecessary_to_list_in_spreads
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6016:15 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6363:19 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6439:17 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6446:17 • prefer_const_constructors
+   info • The constant name 'TZS_PER_LITER' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:10:23 • constant_identifier_names
+   info • The constant name 'LAST_VOLUME_KEY' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:11:23 • constant_identifier_names
+  error • Const variables must be initialized with a constant value • lib/services/notification_service.dart:95:16 • const_initialized_with_non_constant_value
+  error • Invalid constant value • lib/services/notification_service.dart:95:16 • invalid_constant
+

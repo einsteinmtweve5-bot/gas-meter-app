@@ -1,0 +1,32 @@
+Analyzing gas_meter_app...                                      
+
+   info • Don't invoke 'print' in production code • lib/main.dart:43:3 • avoid_print
+   info • The local variable '_resetGasUsage' starts with an underscore • lib/main.dart:881:18 • no_leading_underscores_for_local_identifiers
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:892:13 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:893:24 • prefer_const_constructors
+  error • Undefined name 'Int64List' • lib/main.dart:1017:48 • undefined_identifier
+   info • 'swapAnimationDuration' is deprecated and shouldn't be used. Please use [duration] instead • lib/main.dart:2104:33 • deprecated_member_use
+   info • 'swapAnimationCurve' is deprecated and shouldn't be used. Please use [curve] instead • lib/main.dart:2106:33 • deprecated_member_use
+   info • Statements in an if should be enclosed in a block • lib/main.dart:2984:7 • curly_braces_in_flow_control_structures
+   info • Use interpolation to compose strings and values • lib/main.dart:2997:36 • prefer_interpolation_to_compose_strings
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:3285:26 • prefer_const_constructors
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:3288:29 • prefer_const_literals_to_create_immutables
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:4494:21 • prefer_const_literals_to_create_immutables
+   info • Unnecessary use of string interpolation • lib/main.dart:4613:31 • unnecessary_string_interpolations
+   info • Unnecessary use of string interpolation • lib/main.dart:4624:31 • unnecessary_string_interpolations
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:5237:35 • prefer_const_constructors
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5285:35 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5286:35 • deprecated_member_use
+   info • Use interpolation to compose strings and values • lib/main.dart:5305:39 • prefer_interpolation_to_compose_strings
+   info • 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5335:37 • deprecated_member_use
+   info • 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre • lib/main.dart:5336:37 • deprecated_member_use
+   info • Unnecessary use of 'toList' in a spread • lib/main.dart:5342:36 • unnecessary_to_list_in_spreads
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6014:15 • deprecated_member_use
+   info • 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre • lib/main.dart:6361:19 • deprecated_member_use
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6437:17 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:6444:17 • prefer_const_constructors
+   info • The constant name 'TZS_PER_LITER' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:10:23 • constant_identifier_names
+   info • The constant name 'LAST_VOLUME_KEY' isn't a lowerCamelCase identifier • lib/services/meter_service.dart:11:23 • constant_identifier_names
+  error • Const variables must be initialized with a constant value • lib/services/notification_service.dart:95:16 • const_initialized_with_non_constant_value
+  error • Invalid constant value • lib/services/notification_service.dart:95:16 • invalid_constant
+

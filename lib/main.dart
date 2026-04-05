@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import 'services/connectivity_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:vibration/vibration.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'services/notification_service.dart';
 import 'package:crypto/crypto.dart';
 
 class AppConfig {
@@ -30,6 +32,13 @@ class AppConfig {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    await Firebase.initializeApp();
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('DEBUG: Firebase/Notification initialization failed: $e');
+  }
 
   try {
     await dotenv.load(fileName: ".env");
@@ -38,7 +47,7 @@ void main() async {
   }
 
   final key = dotenv.env['GROQ_API_KEY'];
-  print(
+  debugPrint(
       'DEBUG: GROQ_API_KEY loaded: ${key != null && key.isNotEmpty ? "YES (First 5: ${key.substring(0, 5)}...)" : "NO"}');
 
   try {
@@ -66,13 +75,64 @@ void main() async {
   );
 }
 
-class AppTheme extends ChangeNotifier {
-  bool isDark = true; // Dark theme by default
+class FluxGuardColors {
+  static const Color background = Color(0xFF0F172A);
+  static const Color cardBackground = Color(0xFF1E293B);
+  static const Color primary = Color(0xFF3B82F6); // AI Blue
+  static const Color accent = Color(0xFFF97316); // Orange
+  static const Color success = Color(0xFF22C55E); // Green
+  static const Color warning = Color(0xFFF59E0B); // Amber
+  static const Color info = Color(0xFF06B6D4); // Cyan
+  static const Color danger = Color(0xFFEF4444); // Red
+  static const Color textPrimary = Colors.white;
+  static const Color textSecondary = Color(0xFF94A3B8);
+  
+  static const Gradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  
+  static const Gradient successGradient = LinearGradient(
+    colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+}
 
-  void toggle() {
-    isDark = !isDark;
-    notifyListeners();
-  }
+class AppTheme extends ChangeNotifier {
+  bool isDark = true; // Still supporting dark mode only as requested
+
+  ThemeData get themeData => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    scaffoldBackgroundColor: FluxGuardColors.background,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: FluxGuardColors.primary,
+      brightness: Brightness.dark,
+      surface: FluxGuardColors.cardBackground,
+    ),
+    textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
+      headlineMedium: GoogleFonts.inter(
+        color: FluxGuardColors.textPrimary,
+        fontWeight: FontWeight.bold,
+        fontSize: 24,
+      ),
+      bodyLarge: GoogleFonts.inter(
+        color: FluxGuardColors.textPrimary,
+        fontSize: 16,
+      ),
+      bodySmall: GoogleFonts.inter(
+        color: FluxGuardColors.textSecondary,
+        fontSize: 12,
+      ),
+    ),
+    cardTheme: CardThemeData(
+      color: FluxGuardColors.cardBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      elevation: 0,
+    ),
+  );
 }
 
 class FluxGuardApp extends StatelessWidget {
@@ -85,24 +145,9 @@ class FluxGuardApp extends StatelessWidget {
     return MaterialApp(
       title: 'FluxGuard',
       debugShowCheckedModeBanner: false,
-      themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        textTheme: GoogleFonts.interTextTheme(),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo, brightness: Brightness.dark),
-        scaffoldBackgroundColor: Colors.grey[900],
-        cardTheme: CardThemeData(
-          color: Colors.grey[850],
-        ),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-      ),
+      themeMode: ThemeMode.dark,
+      theme: theme.themeData,
+      darkTheme: theme.themeData,
       home: const AuthWrapper(),
     );
   }
@@ -420,30 +465,6 @@ class _LoginPageState extends State<LoginPage> {
                         child: const Text('Lost your password?',
                             style: TextStyle(color: Colors.white70)),
                       ),
-                      // const SizedBox(height: 32),
-                      // const Text('OR',
-                      //     style:
-                      //         TextStyle(color: Colors.white70, fontSize: 16)),
-                      // const SizedBox(height: 16),
-                      // SizedBox(
-                      //   width: double.infinity,
-                      //   height: 56,
-                      //   child: ElevatedButton.icon(
-                      //     onPressed: signUpWithGoogle,
-                      //     icon: const Icon(Icons.account_circle,
-                      //         color: Colors.black87),
-                      //     label: Text(
-                      //       'Sign in with Google',
-                      //       style: GoogleFonts.inter(
-                      //           fontSize: 18, color: Colors.black87),
-                      //     ),
-                      //     style: ElevatedButton.styleFrom(
-                      //       backgroundColor: Colors.white,
-                      //       shape: RoundedRectangleBorder(
-                      //           borderRadius: BorderRadius.circular(16)),
-                      //     ),
-                      //   ),
-                      // ),
                     ],
                   ),
                 ),
@@ -605,25 +626,36 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> pages = [
       DashboardPage(isOffline: isOffline),
       ReportsPage(isOffline: isOffline),
-      AlertsPage(isOffline: isOffline),
-      TopUpPage(isOffline: isOffline),
-      AIChatPage(isOffline: isOffline),
-      SettingsPage(isOffline: isOffline),
+      const AlertsPage(),
+      const TopUpPage(),
+      const AIInsightPage(),
+      const SettingsPage(),
     ];
 
     final List<BottomNavigationBarItem> navItems = [
       const BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard), label: 'Dashboard'),
+          icon: Icon(Icons.home_outlined), 
+          activeIcon: Icon(Icons.home),
+          label: 'Dashboard'),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart), label: 'Reports'),
+          icon: Icon(Icons.bar_chart_outlined),
+          activeIcon: Icon(Icons.bar_chart),
+          label: 'Reports'),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.notifications), label: 'Alerts'),
+          icon: Icon(Icons.notifications_outlined),
+          activeIcon: Icon(Icons.notifications),
+          label: 'Alerts'),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.payment), label: 'Top-Ups'),
+          icon: Icon(Icons.credit_card_outlined),
+          activeIcon: Icon(Icons.credit_card),
+          label: 'Top-Ups'),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.smart_toy), label: 'AI Chat'),
+          icon: Icon(Icons.auto_awesome),
+          label: 'AI Insight'),
       const BottomNavigationBarItem(
-          icon: Icon(Icons.settings), label: 'Settings'),
+          icon: Icon(Icons.settings_outlined),
+          activeIcon: Icon(Icons.settings),
+          label: 'Settings'),
     ];
 
     return Scaffold(
@@ -634,12 +666,27 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           : null,
       body: pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.indigo,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: navItems,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: FluxGuardColors.cardBackground,
+          selectedItemColor: FluxGuardColors.primary,
+          unselectedItemColor: FluxGuardColors.textSecondary,
+          selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11),
+          unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          items: navItems,
+        ),
       ),
     );
   }
@@ -653,855 +700,150 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
-  String? meterId; // User's specific meter ID from profile
-  bool? _localValveStatus; // Local override for immediate UI update
+class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
+  String? meterId;
+  String? userName;
+  bool? _localValveStatus;
   bool _isLoadingMeterId = true;
-  MeterService? _meterService; // Service to handle credit reduction
-  DateTime? _lastVibrationTime; // To throttle leakage alerts
-  ConnectivityService? _connectivityService; // To watch for online/offline transitions
-  final AudioPlayer _audioPlayer = AudioPlayer(); // For sound alerts
-  bool _isSimulatingLeak = false; // For development/testing
+  MeterService? _meterService;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlayingAlert = false;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
     _loadUserMeterId();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _meterService?.dispose();
     _audioPlayer.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final cs = Provider.of<ConnectivityService>(context);
-    if (_connectivityService != null && 
-        _connectivityService!.isOffline && 
-        cs.isOnline) {
-      // Transitioned from offline to online - trigger sync
-      _syncPendingChanges();
-    }
-    _connectivityService = cs;
-  }
-
-  Future<void> _syncPendingChanges() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pendingValve = prefs.getBool('pending_valve_sync');
-    if (pendingValve != null && meterId != null) {
-      debugPrint('Syncing pending valve status: $pendingValve');
-      try {
-        await Supabase.instance.client
-            .from('meters')
-            .update({'valve_status': pendingValve}).eq('id', meterId!);
-        await prefs.remove('pending_valve_sync');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Offline changes synchronized'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Sync failed: $e');
-      }
-    }
-  }
-
   Future<void> _loadUserMeterId() async {
-    if (widget.isOffline) {
-      final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        meterId = prefs.getString('offline_meter_id');
-        _isLoadingMeterId = false;
-        if (meterId != null) {
-          _meterService = MeterService(meterId!);
-        }
-      });
-      return;
-    }
-
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('meter_id')
-            .eq('id', userId)
-            .single();
-
-        final mId = profile['meter_id'];
+        final profile = await supabase.from('profiles').select('meter_id, full_name').eq('id', userId).single();
         setState(() {
-          meterId = mId;
+          meterId = profile['meter_id'];
+          userName = profile['full_name'] ?? 'edg fahim';
           _isLoadingMeterId = false;
-
-          // Initialize MeterService when meter ID is available
-          if (meterId != null) {
-            _meterService = MeterService(meterId!);
-            debugPrint('MeterService initialized for meter: $meterId');
-          }
+          if (meterId != null) _meterService = MeterService(meterId!);
         });
-
-        // Cache meter_id
-        if (mId != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('offline_meter_id', mId);
-        }
       } else {
-        setState(() {
-          _isLoadingMeterId = false;
-        });
+        setState(() => _isLoadingMeterId = false);
       }
-    } catch (e) {
+    } catch (_) {
       final prefs = await SharedPreferences.getInstance();
       setState(() {
         meterId = prefs.getString('offline_meter_id');
+        userName = 'edg fahim';
         _isLoadingMeterId = false;
-        if (meterId != null) {
-          _meterService = MeterService(meterId!);
-        }
+        if (meterId != null) _meterService = MeterService(meterId!);
       });
     }
   }
 
-  Future<void> _cacheData(double credit, bool valveOpen, double flowRate,
-      double totalVolume, double velocity) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('cached_credit', credit);
-    await prefs.setBool('cached_valve', valveOpen);
-    await prefs.setDouble('cached_flow', flowRate);
-    await prefs.setDouble('cached_total_volume', totalVolume);
-    await prefs.setDouble('cached_velocity', velocity);
-  }
-
   Future<void> _toggleValve(bool newStatus) async {
-    final supabase = Supabase.instance.client;
-
-    // Check if meter ID is available
-    if (meterId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'No meter assigned to your account',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-      return;
-    }
-
-    setState(() {
-      _localValveStatus = newStatus;
-    });
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('cached_valve', newStatus);
-
-    if (widget.isOffline || (Provider.of<ConnectivityService>(context, listen: false).isOffline)) {
-      // Offline mode: save for later sync
-      await prefs.setBool('pending_valve_sync', newStatus);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newStatus 
-                  ? 'Valve Open (Offline - will sync later)' 
-                  : 'Valve Closed (Offline - will sync later)',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      return;
-    }
-
+    if (meterId == null) return;
+    setState(() => _localValveStatus = newStatus);
     try {
-      await supabase
-          .from('meters')
-          .update({'valve_status': newStatus}).eq('id', meterId!);
-      
-      // Clear pending sync if we just successfully updated
-      await prefs.remove('pending_valve_sync');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newStatus
-                  ? 'Valve Opened Successfully'
-                  : 'Valve Closed Successfully',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: newStatus ? Colors.green : Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-    } catch (e) {
-      // If error (e.g. timeout), treat as pending sync
-      await prefs.setBool('pending_valve_sync', newStatus);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved locally: $e'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
+      await Supabase.instance.client.from('meters').update({'valve_status': newStatus}).eq('id', meterId!);
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Function to reset gas usage
-    Future<void> _resetGasUsage() async {
-      if (meterId == null) return;
-
-      try {
-        await supabase
-            .from('meters')
-            .update({'total_volume': 0.0}).eq('id', meterId!);
-
-        // Show confirmation
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gas usage reset to 0 liters'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to reset gas usage: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-
-    void _testAlert() {
-      Vibration.hasVibrator().then((hasVibrator) {
-        if (hasVibrator == true) {
-          Vibration.vibrate(pattern: [500, 500, 500]);
-        }
-      });
-      _audioPlayer.play(UrlSource('https://www.soundjay.com/buttons/beep-01a.mp3'));
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Testing alert (Vibration & Sound)...')),
-        );
-      }
-    }
-
-    Future<void> _simulateLeak() async {
-      setState(() {
-        _isSimulatingLeak = !_isSimulatingLeak;
-      });
-      
-      if (meterId != null && !widget.isOffline) {
-         try {
-           await supabase
-               .from('meters')
-               .update({'gas_leak': _isSimulatingLeak})
-               .eq('id', meterId!);
-         } catch (e) {
-           debugPrint('Simulate leak update failed: $e');
-         }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isSimulatingLeak ? 'Leak simulation started!' : 'Leak simulation stopped'),
-            backgroundColor: _isSimulatingLeak ? Colors.red : Colors.green,
-          ),
-        );
-      }
-    }
-
-    // Show loading indicator while fetching meter ID
-    if (_isLoadingMeterId) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.indigo[700]),
-              const SizedBox(height: 16),
-              Text(
-                'Loading your meter...',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Show message if no meter is assigned
-    if (meterId == null) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.gas_meter_outlined,
-                  size: 80,
-                  color: isDark ? Colors.grey[700] : Colors.grey[400],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'No Meter Assigned',
-                  style: GoogleFonts.outfit(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Please contact your administrator to assign a meter to your account.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    if (_isLoadingMeterId) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (meterId == null) return _buildNoMeterState();
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       body: StreamBuilder(
-        stream: supabase
-            .from('meters')
-            .stream(primaryKey: ['id']).eq('id', meterId!),
+        stream: Supabase.instance.client.from('meters').stream(primaryKey: ['id']).eq('id', meterId!),
         builder: (context, snapshot) {
-          double credit = 80.0;
-          bool valveOpen = true;
-          double flowRate = 0.0;
-          double totalVolume = 0.0;
+          double credit = 0.0;
+          bool valveOpen = false;
           double velocity = 0.0;
           bool leakDetected = false;
-          bool isOffline = false;
 
           if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             final meter = snapshot.data![0];
-            credit = double.tryParse(
-                    meter['current_credit']?.toString() ?? '80.0') ??
-                80.0;
+            credit = double.tryParse(meter['current_credit'].toString()) ?? 0.0;
             valveOpen = _localValveStatus ?? (meter['valve_status'] == true);
-            flowRate = double.tryParse(
-                    meter['current_reading']?.toString() ?? '0.0') ??
-                0.0;
-            totalVolume =
-                double.tryParse(meter['total_volume']?.toString() ?? '0') ??
-                    0.0;
-            velocity =
-                double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
-            leakDetected = meter['gas_leak'] == true && flowRate > 0.0;
-
-            if (leakDetected) {
-              // Trigger vibration if leak detected, with 5 second cooldown
-              final now = DateTime.now();
-              if (_lastVibrationTime == null ||
-                  now.difference(_lastVibrationTime!).inSeconds > 5) {
-                _lastVibrationTime = now;
-                Vibration.hasVibrator().then((hasVibrator) {
-                  if (hasVibrator == true) {
-                    Vibration.vibrate(pattern: [500, 1000, 500, 1000]);
-                  }
-                });
-                // Play sound alert
-                _audioPlayer.play(UrlSource('https://www.soundjay.com/buttons/beep-01a.mp3'));
-              }
+            velocity = double.tryParse(meter['velocity']?.toString() ?? '0.0') ?? 0.0;
+            leakDetected = meter['gas_leak'] == true;
+            
+            if (leakDetected && !_isPlayingAlert) {
+              _isPlayingAlert = true;
+              _audioPlayer.setReleaseMode(ReleaseMode.loop);
+              _audioPlayer.play(UrlSource('https://www.soundjay.com/buttons/beep-01a.mp3'));
+            } else if (!leakDetected && _isPlayingAlert) {
+              _isPlayingAlert = false;
+              _audioPlayer.stop();
             }
-
-            _cacheData(credit, valveOpen, flowRate, totalVolume, velocity);
-          } else if (widget.isOffline || snapshot.hasError) {
-            isOffline = true;
-          } else {
-            isOffline = snapshot.connectionState == ConnectionState.waiting;
           }
 
-          // In both cases (real offline or loading), try to load from cache as fallback
-          return FutureBuilder<SharedPreferences>(
-            future: SharedPreferences.getInstance(),
-            builder: (context, prefsSnapshot) {
-              if (prefsSnapshot.hasData &&
-                  (isOffline || !snapshot.hasData || snapshot.hasError)) {
-                final prefs = prefsSnapshot.data!;
-                credit = prefs.getDouble('cached_credit') ?? credit;
-                valveOpen = _localValveStatus ??
-                    prefs.getBool('cached_valve') ??
-                    valveOpen;
-                flowRate = prefs.getDouble('cached_flow') ?? flowRate;
-                totalVolume =
-                    prefs.getDouble('cached_total_volume') ?? totalVolume;
-                velocity = prefs.getDouble('cached_velocity') ?? velocity;
-                isOffline = true; // Force offline UI if using cache
-              }
-
-              return CustomScrollView(
-                slivers: [
-                  SliverAppBar(
-                    expandedHeight: 120,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    flexibleSpace: FlexibleSpaceBar(
-                      background: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 16),
-                        alignment: Alignment.bottomLeft,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome Back,',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                              ),
-                            ),
-                            Text(
-                              'Dashboard',
-                              style: GoogleFonts.outfit(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color:
-                                    isDark ? Colors.white : Colors.indigo[900],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          // Leak Detection Alert
-                          if (leakDetected)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 24),
-                              child: _buildLeakAlert(isDark),
-                            ),
-
-                          // Credit Card
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            duration: const Duration(milliseconds: 600),
-                            curve: Curves.easeOutBack,
-                            builder: (context, value, child) {
-                              return Transform.scale(
-                                scale: value,
-                                child:
-                                    _buildCreditCard(credit, isOffline, isDark),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Valve Control
-                          Text(
-                            'Valve Control',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildValveButton(
-                                  title: 'OPEN VALVE',
-                                  isActive: valveOpen,
-                                  isOpening: true,
-                                  onTap: () => _toggleValve(true),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildValveButton(
-                                  title: 'CLOSE VALVE',
-                                  isActive: !valveOpen,
-                                  isOpening: false,
-                                  onTap: () => _toggleValve(false),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 32),
-
-                          // Gas Flow Gauge
-                          Text(
-                            'Real-time Flow Rate',
-                            style: GoogleFonts.outfit(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            height: 280,
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E2336)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(32),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: SfRadialGauge(
-                              axes: <RadialAxis>[
-                                RadialAxis(
-                                  minimum: 0,
-                                  maximum: 5, // Velocity in m/s
-                                  startAngle: 180,
-                                  endAngle: 0,
-                                  showLabels: false,
-                                  showTicks: false,
-                                  axisLineStyle: AxisLineStyle(
-                                    thickness: 0.2,
-                                    thicknessUnit: GaugeSizeUnit.factor,
-                                    cornerStyle: CornerStyle.bothCurve,
-                                    color: isDark
-                                        ? Colors.grey[800]
-                                        : Colors.grey[100],
-                                  ),
-                                  pointers: <GaugePointer>[
-                                    RangePointer(
-                                      value: velocity,
-                                      width: 0.2,
-                                      sizeUnit: GaugeSizeUnit.factor,
-                                      cornerStyle: CornerStyle.bothCurve,
-                                      gradient: const SweepGradient(
-                                        colors: [Colors.orange, Colors.red],
-                                        stops: [0.0, 1.0],
-                                      ),
-                                    ),
-                                    MarkerPointer(
-                                      value: velocity,
-                                      markerType: MarkerType.circle,
-                                      color: Colors.white,
-                                      markerHeight: 16,
-                                      markerWidth: 16,
-                                      borderWidth: 4,
-                                      borderColor: Colors.red,
-                                    ),
-                                  ],
-                                  annotations: <GaugeAnnotation>[
-                                    GaugeAnnotation(
-                                      widget: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            velocity.toStringAsFixed(2),
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 48,
-                                              fontWeight: FontWeight.bold,
-                                              color: isDark
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          ),
-                                          Text(
-                                            'm/s Velocity',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 14,
-                                              color: isDark
-                                                  ? Colors.grey[400]
-                                                  : Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      angle: 90,
-                                      positionFactor: 0.1,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Total Volume Card
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E2336)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(32),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.gas_meter,
-                                      color: Colors.orange, size: 32),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Total Gas Amount',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 14,
-                                          color: isDark
-                                              ? Colors.grey[400]
-                                              : Colors.grey[600],
-                                        ),
-                                      ),
-                                      Text(
-                                        '${totalVolume.toStringAsFixed(2)} Liters',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Testing & Simulation Controls
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _testAlert,
-                                  icon: const Icon(Icons.notifications_active),
-                                  label: const Text('Test Alert'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blueGrey,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _simulateLeak,
-                                  icon: Icon(_isSimulatingLeak ? Icons.stop : Icons.play_arrow),
-                                  label: Text(_isSimulatingLeak ? 'Stop Leak' : 'Simulate Leak'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _isSimulatingLeak ? Colors.red : Colors.orange,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Reset Gas Usage Button
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF1E2336)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: _resetGasUsage,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.redAccent,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 16),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(18),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Reset Gas Usage to Zero',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 100), // Bottom padding
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeader()),
+              if (_localValveStatus == true && (_meterService?.currentFlow ?? 0.0) > 0.5) _buildLeakAlert(true),
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildCreditCard(credit),
+                    const SizedBox(height: 30),
+                    _buildValveControls(valveOpen),
+                    const SizedBox(height: 30),
+                    _buildFlowGauge(velocity),
+                    const SizedBox(height: 100),
+                  ]),
+                ),
+              ),
+            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildCreditCard(double credit, bool isOffline, bool isDark) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF2E3B5E), const Color(0xFF1E2336)]
-              : [Colors.indigo.shade400, Colors.indigo.shade600],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.indigo.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildHeader() {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, left: 20, right: 20, bottom: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isOffline ? Icons.wifi_off : Icons.wifi,
-                      color:
-                          isOffline ? Colors.orangeAccent : Colors.greenAccent,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isOffline ? 'Offline' : 'Connected',
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.nfc, color: Colors.white.withValues(alpha: 0.5), size: 32),
+              Text('Welcome Back,', style: Theme.of(context).textTheme.bodySmall),
+              Text(userName ?? 'edg fahim', style: Theme.of(context).textTheme.headlineMedium),
             ],
           ),
-          const SizedBox(height: 32),
-          Text(
-            'Available Credit',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 16,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: FluxGuardColors.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: FluxGuardColors.success.withValues(alpha: 0.3)),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${credit.toStringAsFixed(2)} TZS',
-            style: GoogleFonts.outfit(
-              color: Colors.white,
-              fontSize: 48,
-              fontWeight: FontWeight.bold,
+            child: Row(
+              children: [
+                Container(width: 8, height: 8, decoration: const BoxDecoration(color: FluxGuardColors.success, shape: BoxShape.circle)),
+                const SizedBox(width: 8),
+                Text('Connected', style: GoogleFonts.inter(color: FluxGuardColors.success, fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
             ),
           ),
         ],
@@ -1509,65 +851,131 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildValveButton({
-    required String title,
-    required bool isActive,
-    required bool isOpening,
-    required VoidCallback onTap,
-  }) {
-    final activeColor = isOpening ? Colors.greenAccent : Colors.redAccent;
-    final bgGradient = isOpening
-        ? [const Color(0xFF00C853), const Color(0xFF009624)]
-        : [const Color(0xFFD50000), const Color(0xFFB71C1C)];
+  Widget _buildCreditCard(double credit) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(
+        color: FluxGuardColors.cardBackground,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Available Credit', style: GoogleFonts.inter(color: FluxGuardColors.textSecondary, fontSize: 14)),
+          const SizedBox(height: 10),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: credit),
+            duration: const Duration(seconds: 1),
+            builder: (context, value, child) {
+              return Text(
+                '${value.toStringAsFixed(2)} TZS',
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildValveControls(bool isOpen) {
+    return Row(
+      children: [
+        Expanded(child: _buildValveButton(
+          label: 'OPEN VALVE',
+          icon: Icons.water_drop,
+          color: FluxGuardColors.success,
+          isActive: isOpen,
+          onTap: () => _toggleValve(true),
+        )),
+        const SizedBox(width: 20),
+        Expanded(child: _buildValveButton(
+          label: 'CLOSE VALVE',
+          icon: Icons.block,
+          color: FluxGuardColors.danger,
+          isActive: !isOpen,
+          onTap: () => _toggleValve(false),
+        )),
+      ],
+    );
+  }
+
+  Widget _buildValveButton({required String label, required IconData icon, required Color color, required bool isActive, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          gradient: isActive
-              ? LinearGradient(colors: bgGradient)
-              : LinearGradient(
-                  colors: [
-                    Colors.grey.withValues(alpha: 0.1),
-                    Colors.grey.withValues(alpha: 0.05)
-                  ],
-                ),
+          color: isActive ? color.withValues(alpha: 0.2) : FluxGuardColors.cardBackground,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isActive ? Colors.transparent : Colors.grey.withValues(alpha: 0.2),
-          ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: activeColor.withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : [],
+          border: Border.all(color: isActive ? color : Colors.transparent, width: 2),
+          boxShadow: isActive ? [
+            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 15, spreadRadius: 2)
+          ] : [],
         ),
         child: Column(
           children: [
-            Icon(
-              isOpening ? Icons.water_drop : Icons.water_drop_outlined,
-              color: isActive ? Colors.white : Colors.grey,
-              size: 32,
+            FadeTransition(
+              opacity: isActive ? _pulseController : const AlwaysStoppedAnimation(1.0),
+              child: Icon(icon, color: isActive ? color : FluxGuardColors.textSecondary, size: 32),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: GoogleFonts.inter(
-                color: isActive ? Colors.white : Colors.grey,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
+            const SizedBox(height: 10),
+            Text(label, style: GoogleFonts.inter(color: isActive ? Colors.white : FluxGuardColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildFlowGauge(double velocity) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: FluxGuardColors.cardBackground,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 200,
+            child: SfRadialGauge(
+              axes: [
+                RadialAxis(
+                  minimum: 0, maximum: 6, startAngle: 180, endAngle: 0,
+                  showLabels: false, showTicks: false,
+                  axisLineStyle: const AxisLineStyle(thickness: 0.2, thicknessUnit: GaugeSizeUnit.factor, cornerStyle: CornerStyle.bothCurve),
+                  pointers: [
+                    RangePointer(value: velocity, width: 0.2, sizeUnit: GaugeSizeUnit.factor, cornerStyle: CornerStyle.bothCurve, color: FluxGuardColors.primary),
+                    MarkerPointer(value: velocity, markerType: MarkerType.circle, color: Colors.white, markerHeight: 12, markerWidth: 12),
+                  ],
+                  annotations: [
+                    GaugeAnnotation(
+                      widget: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(velocity.toStringAsFixed(2), style: GoogleFonts.inter(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)),
+                          Text('m/s Flow Rate', style: GoogleFonts.inter(fontSize: 12, color: FluxGuardColors.textSecondary)),
+                        ],
+                      ),
+                      angle: 90, positionFactor: 0.1,
+                    )
+                  ],
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMeterState() {
+    return const Scaffold(body: Center(child: Text('No meter assigned', style: TextStyle(color: Colors.white))));
   }
 
   Widget _buildLeakAlert(bool isDark) {
@@ -1577,7 +985,7 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.red.withAlpha(128), width: 2),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.5), width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.red.withValues(alpha: 0.1),
@@ -1638,605 +1046,161 @@ class ReportsPage extends StatefulWidget {
 }
 
 class _ReportsPageState extends State<ReportsPage> {
-  bool _showChart = false;
-  String? meterId; // User's specific meter ID from profile
+  String? meterId;
   bool _isLoadingMeterId = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserMeterId();
-    // Delay animation to ensure smooth entry
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) setState(() => _showChart = true);
-    });
   }
 
   Future<void> _loadUserMeterId() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (widget.isOffline) {
-      if (mounted) {
-        setState(() {
-          meterId = prefs.getString('offline_meter_id');
-          _isLoadingMeterId = false;
-        });
-      }
-      return;
-    }
-
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('meter_id')
-            .eq('id', userId)
-            .single();
-
-        final mId = profile['meter_id'];
-        if (mounted) {
-          setState(() {
-            meterId = mId;
-            _isLoadingMeterId = false;
-          });
-        }
-
-        if (mId != null) {
-          await prefs.setString('offline_meter_id', mId);
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingMeterId = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+        final profile = await supabase.from('profiles').select('meter_id').eq('id', userId).single();
         setState(() {
-          meterId = prefs.getString('offline_meter_id');
+          meterId = profile['meter_id'];
           _isLoadingMeterId = false;
         });
+      } else {
+        setState(() => _isLoadingMeterId = false);
       }
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        meterId = prefs.getString('offline_meter_id');
+        _isLoadingMeterId = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-    final currentData = [50.0, 70.0, 60.0, 80.0, 90.0, 75.0];
-    final futureData = currentData.map((e) => e * 1.1).toList();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_isLoadingMeterId) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (meterId == null) return const Scaffold(body: Center(child: Text('No meter assigned', style: TextStyle(color: Colors.white))));
 
-    // Show loading indicator while fetching meter ID
-    if (_isLoadingMeterId) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.indigo[700]),
-              const SizedBox(height: 16),
-              Text(
-                'Loading reports...',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+    return Scaffold(
+      body: StreamBuilder(
+        stream: Supabase.instance.client.from('meters').stream(primaryKey: ['id']).eq('id', meterId!),
+        builder: (context, snapshot) {
+          double totalVolume = 0.0;
+          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            totalVolume = double.tryParse(snapshot.data![0]['total_volume'].toString()) ?? 0.0;
+          }
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeader(totalVolume)),
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildChartSection(
+                      title: 'Weekly Usage',
+                      subtitle: 'Gas consumption in Liters',
+                      child: _buildLineChart(),
+                    ),
+                    const SizedBox(height: 30),
+                    _buildChartSection(
+                      title: 'Monthly Forecast',
+                      subtitle: 'Predicted usage based on AI',
+                      child: _buildBarChart(),
+                    ),
+                    const SizedBox(height: 100),
+                  ]),
                 ),
               ),
             ],
-          ),
-        ),
-      );
-    }
-
-    // Show message if no meter is assigned
-    if (meterId == null) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.bar_chart_outlined,
-                  size: 80,
-                  color: isDark ? Colors.grey[700] : Colors.grey[400],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'No Meter Assigned',
-                  style: GoogleFonts.outfit(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Please contact your administrator to assign a meter to your account.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-      body: StreamBuilder(
-        stream: supabase
-            .from('meters')
-            .stream(primaryKey: ['id']).eq('id', meterId!),
-        builder: (context, snapshot) {
-          double totalVolume = 0.0;
-
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            final meter = snapshot.data![0];
-            totalVolume =
-                double.tryParse(meter['total_volume']?.toString() ?? '0') ??
-                    0.0;
-            // Cache for offline
-            SharedPreferences.getInstance().then((prefs) {
-              prefs.setDouble('cached_total_volume', totalVolume);
-              // In a real app, we would cache more granular usage data here
-            });
-          } else if (widget.isOffline || snapshot.hasError) {
-             // Fallback to cache handled in FutureBuilder below
-          }
-
-          return FutureBuilder<SharedPreferences>(
-            future: SharedPreferences.getInstance(),
-            builder: (context, prefsSnapshot) {
-              if (prefsSnapshot.hasData &&
-                  (snapshot.hasError || !snapshot.hasData)) {
-                totalVolume =
-                    prefsSnapshot.data!.getDouble('cached_total_volume') ??
-                        totalVolume;
-              }
-
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                        height: 48), // Padding for top status bar area
-
-                    // Total Usage Since Purchase Card
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E2336) : Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Total Usage Since Purchase',
-                            style: GoogleFonts.outfit(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.indigo[900],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: const Icon(Icons.local_gas_station,
-                                    color: Colors.orange, size: 32),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Total Gas Consumed',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 14,
-                                        color: isDark
-                                            ? Colors.grey[400]
-                                            : Colors.grey[600],
-                                      ),
-                                    ),
-                                    Text(
-                                      '${totalVolume.toStringAsFixed(2)} Liters',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: Transform.translate(
-                            offset: Offset(0, 20 * (1 - value)),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Usage Insights',
-                              style: GoogleFonts.outfit(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.white
-                                      : Colors.indigo[900])),
-                          Text('Track your gas consumption over time',
-                              style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  color: isDark
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600])),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Current Usage Chart (Line Chart)
-                    _buildChartSection(
-                      title: 'Current Usage Trend',
-                      subtitle: 'Last 6 Months',
-                      isDark: isDark,
-                      delay: 200,
-                      child: SizedBox(
-                        height: 300,
-                        child: _showChart
-                            ? LineChart(
-                                LineChartData(
-                                  gridData: FlGridData(
-                                    show: true,
-                                    drawVerticalLine: false,
-                                    horizontalInterval: 20,
-                                    getDrawingHorizontalLine: (value) {
-                                      return FlLine(
-                                        color: isDark
-                                            ? Colors.white.withValues(alpha: 0.05)
-                                            : Colors.indigo.withValues(alpha: 0.05),
-                                        strokeWidth: 1,
-                                      );
-                                    },
-                                  ),
-                                  titlesData: FlTitlesData(
-                                    show: true,
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 30,
-                                        interval: 1,
-                                        getTitlesWidget: (value, meta) {
-                                          const titles = [
-                                            'Jan',
-                                            'Feb',
-                                            'Mar',
-                                            'Apr',
-                                            'May',
-                                            'Jun'
-                                          ];
-                                          if (value.toInt() >= 0 &&
-                                              value.toInt() < titles.length) {
-                                            return SideTitleWidget(
-                                              meta: meta,
-                                              child: Text(
-                                                titles[value.toInt()],
-                                                style: GoogleFonts.inter(
-                                                  color: Colors.grey,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox();
-                                        },
-                                      ),
-                                    ),
-                                    leftTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  minX: 0,
-                                  maxX: 5,
-                                  minY: 0,
-                                  maxY: 100,
-                                  lineBarsData: [
-                                    LineChartBarData(
-                                      spots: currentData
-                                          .asMap()
-                                          .entries
-                                          .map((e) =>
-                                              FlSpot(e.key.toDouble(), e.value))
-                                          .toList(),
-                                      isCurved: true,
-                                      gradient: const LinearGradient(
-                                        colors: [
-                                          Colors.cyanAccent,
-                                          Colors.blueAccent
-                                        ],
-                                      ),
-                                      barWidth: 4,
-                                      isStrokeCapRound: true,
-                                      dotData: FlDotData(
-                                        show: true,
-                                        getDotPainter:
-                                            (spot, percent, barData, index) {
-                                          return FlDotCirclePainter(
-                                            radius: 4,
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                            strokeColor: Colors.blueAccent,
-                                          );
-                                        },
-                                      ),
-                                      belowBarData: BarAreaData(
-                                        show: true,
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.blueAccent.withValues(alpha: 0.3),
-                                            Colors.blueAccent.withValues(alpha: 0.0),
-                                          ],
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                duration: const Duration(milliseconds: 800),
-                                curve: Curves.easeInOut,
-                              )
-                            : Container(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Projected Usage Chart (Bar Chart)
-                    _buildChartSection(
-                      title: 'Projected Usage',
-                      subtitle: 'Next 6 Months Forecast',
-                      isDark: isDark,
-                      delay: 400,
-                      child: SizedBox(
-                        height: 300,
-                        child: _showChart
-                            ? BarChart(
-                                BarChartData(
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: 120,
-                                  barTouchData: BarTouchData(
-                                    enabled: true,
-                                    touchTooltipData: BarTouchTooltipData(
-                                      getTooltipColor: (_) =>
-                                          Colors.indigo.withValues(alpha: 0.8),
-                                      tooltipBorderRadius:
-                                          BorderRadius.circular(8),
-                                      tooltipPadding: const EdgeInsets.all(8),
-                                      tooltipMargin: 8,
-                                      getTooltipItem:
-                                          (group, groupIndex, rod, rodIndex) {
-                                        return BarTooltipItem(
-                                          '${rod.toY.round()} Units',
-                                          const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  titlesData: FlTitlesData(
-                                    show: true,
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) {
-                                          const titles = [
-                                            'Jul',
-                                            'Aug',
-                                            'Sep',
-                                            'Oct',
-                                            'Nov',
-                                            'Dec'
-                                          ];
-                                          if (value.toInt() >= 0 &&
-                                              value.toInt() < titles.length) {
-                                            return SideTitleWidget(
-                                              meta: meta,
-                                              child: Text(
-                                                titles[value.toInt()],
-                                                style: GoogleFonts.inter(
-                                                  color: Colors.grey,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const SizedBox();
-                                        },
-                                      ),
-                                    ),
-                                    leftTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                  ),
-                                  gridData: FlGridData(
-                                    show: true,
-                                    drawVerticalLine: false,
-                                    horizontalInterval: 20,
-                                    getDrawingHorizontalLine: (value) => FlLine(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.05)
-                                          : Colors.indigo.withValues(alpha: 0.05),
-                                      strokeWidth: 1,
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  barGroups:
-                                      futureData.asMap().entries.map((e) {
-                                    return BarChartGroupData(
-                                      x: e.key,
-                                      barRods: [
-                                        BarChartRodData(
-                                          toY: e.value,
-                                          gradient: const LinearGradient(
-                                            colors: [
-                                              Colors.indigoAccent,
-                                              Colors.purpleAccent
-                                            ],
-                                            begin: Alignment.bottomCenter,
-                                            end: Alignment.topCenter,
-                                          ),
-                                          width: 16,
-                                          borderRadius:
-                                              const BorderRadius.vertical(
-                                                  top: Radius.circular(6)),
-                                          backDrawRodData:
-                                              BackgroundBarChartRodData(
-                                            show: true,
-                                            toY: 120,
-                                            color: isDark
-                                                ? Colors.white.withValues(alpha: 0.05)
-                                                : Colors.grey.withValues(alpha: 0.1),
-                                          ),
-                                        )
-                                      ],
-                                    );
-                                  }).toList(),
-                                ),
-                                swapAnimationDuration:
-                                    const Duration(milliseconds: 800),
-                                swapAnimationCurve: Curves.easeInOut,
-                              )
-                            : Container(),
-                      ),
-                    ),
-                    const SizedBox(height: 100), // Bottom padding
-                  ],
-                ),
-              );
-            },
           );
         },
       ),
     );
   }
 
-  Widget _buildChartSection(
-      {required String title,
-      required String subtitle,
-      required bool isDark,
-      required int delay,
-      required Widget child}) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600 + delay),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, _) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E2336).withValues(alpha: 0.6)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.transparent,
+  Widget _buildHeader(double total) {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, left: 20, right: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Analytics', style: Theme.of(context).textTheme.bodySmall),
+          Text('Consumption Reports', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: FluxGuardColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: FluxGuardColors.primary.withValues(alpha: 0.2))),
+            child: Row(
+              children: [
+                const Icon(Icons.show_chart, color: FluxGuardColors.primary, size: 30),
+                const SizedBox(width: 15),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Total Consumption', style: GoogleFonts.inter(color: FluxGuardColors.textSecondary, fontSize: 12)),
+                    Text('${total.toStringAsFixed(1)} Liters', style: GoogleFonts.outfit(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.indigo[900])),
-                  Text(subtitle,
-                      style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
-                  const SizedBox(height: 24),
-                  child,
-                ],
-              ),
+              ],
             ),
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChartSection({required String title, required String subtitle, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: FluxGuardColors.cardBackground, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: FluxGuardColors.textSecondary)),
+          const SizedBox(height: 20),
+          SizedBox(height: 200, child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLineChart() {
+    return LineChart(
+      LineChartData(
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: [const FlSpot(0, 3), const FlSpot(2, 5), const FlSpot(4, 4), const FlSpot(6, 8)],
+            isCurved: true,
+            color: FluxGuardColors.primary,
+            barWidth: 4,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: true, color: FluxGuardColors.primary.withValues(alpha: 0.1)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBarChart() {
+    return BarChart(
+      BarChartData(
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        barGroups: [
+          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 8, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
+          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 10, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
+          BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 14, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
+        ],
+      ),
     );
   }
 }
@@ -2252,6 +1216,10 @@ class AlertsPage extends StatefulWidget {
 class _AlertsPageState extends State<AlertsPage> {
   String? meterId;
   bool _isLoadingMeterId = true;
+  String _selectedCategory = 'All';
+  final TextEditingController _searchController = TextEditingController();
+
+  final List<String> _categories = ['All', 'Critical', 'Maintenance', 'Billing'];
 
   @override
   void initState() {
@@ -2260,314 +1228,177 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _loadUserMeterId() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (widget.isOffline) {
-      if (mounted) {
-        setState(() {
-          meterId = prefs.getString('offline_meter_id');
-          _isLoadingMeterId = false;
-        });
-      }
-      return;
-    }
-
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('meter_id')
-            .eq('id', userId)
-            .single();
-
-        final mId = profile['meter_id'];
-        if (mounted) {
-          setState(() {
-            meterId = mId;
-            _isLoadingMeterId = false;
-          });
-        }
-
-        if (mId != null) {
-          await prefs.setString('offline_meter_id', mId);
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingMeterId = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+        final profile = await supabase.from('profiles').select('meter_id').eq('id', userId).single();
         setState(() {
-          meterId = prefs.getString('offline_meter_id');
+          meterId = profile['meter_id'];
           _isLoadingMeterId = false;
         });
+      } else {
+        setState(() => _isLoadingMeterId = false);
       }
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        meterId = prefs.getString('offline_meter_id');
+        _isLoadingMeterId = false;
+      });
     }
-  }
-
-  Future<void> _cacheAlerts(List<dynamic> alerts) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('cached_alerts', jsonEncode(alerts));
   }
 
   @override
   Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (_isLoadingMeterId) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (meterId == null) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Text('No meter assigned',
-              style: GoogleFonts.inter(
-                  color: isDark ? Colors.white70 : Colors.black87)),
-        ),
-      );
-    }
+    if (_isLoadingMeterId) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (meterId == null) return const Scaffold(body: Center(child: Text('No meter assigned', style: TextStyle(color: Colors.white))));
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverAppBar(
-            expandedHeight: 120,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                alignment: Alignment.bottomLeft,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: GoogleFonts.outfit(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.indigo[900],
-                      ),
-                    ),
-                    Text(
-                      'Stay updated with your system status',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          SliverToBoxAdapter(child: _buildHeader()),
+          SliverToBoxAdapter(child: _buildFilters()),
           StreamBuilder(
-            stream: supabase
-                .from('alerts')
-                .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId!)
-                .order('timestamp', ascending: false),
+            stream: Supabase.instance.client.from('alerts').stream(primaryKey: ['id']).eq('meter_id', meterId!).order('timestamp', ascending: false),
             builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                _cacheAlerts(snapshot.data!);
+              final alerts = snapshot.data ?? [];
+              final filteredAlerts = alerts.where((a) {
+                if (_selectedCategory == 'All') return true;
+                return (a['type'] ?? '').toString().toLowerCase().contains(_selectedCategory.toLowerCase());
+              }).toList();
+
+              if (filteredAlerts.isEmpty) {
+                return const SliverFillRemaining(child: Center(child: Text('No events found', style: TextStyle(color: Colors.grey))));
               }
 
-              return FutureBuilder<SharedPreferences>(
-                future: SharedPreferences.getInstance(),
-                builder: (context, prefsSnapshot) {
-                  List<dynamic> alerts = snapshot.data ?? [];
-                  if (prefsSnapshot.hasData &&
-                      (snapshot.hasError ||
-                          !snapshot.hasData ||
-                          alerts.isEmpty)) {
-                    final cached =
-                        prefsSnapshot.data!.getString('cached_alerts');
-                    if (cached != null) {
-                      try {
-                        alerts = jsonDecode(cached);
-                      } catch (_) {}
-                    }
-                  }
-
-                  if (alerts.isEmpty) {
-                    return SliverFillRemaining(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_off_outlined,
-                                size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text('No alerts yet',
-                                style: GoogleFonts.inter(
-                                    color: Colors.grey[400], fontSize: 18)),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return SliverPadding(
-                    padding: const EdgeInsets.all(24),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final alert = alerts[index];
-                          final type = alert['type'] ?? 'Unknown';
-                          final message = alert['message'] ?? 'No message';
-                          final timestamp =
-                              DateTime.parse(alert['timestamp']).toLocal();
-
-                          return TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            duration:
-                                Duration(milliseconds: 400 + (index * 100)),
-                            curve: Curves.easeOutCubic,
-                            builder: (context, value, child) {
-                              return Transform.translate(
-                                offset: Offset(0, 50 * (1 - value)),
-                                child: Opacity(
-                                  opacity: value,
-                                  child: _buildAlertCard(
-                                      type, message, timestamp, isDark),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        childCount: alerts.length,
-                      ),
-                    ),
-                  );
-                },
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildAlertItem(filteredAlerts[index]),
+                    childCount: filteredAlerts.length,
+                  ),
+                ),
               );
             },
           ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
   }
 
-  Widget _buildAlertCard(
-      String type, String message, DateTime timestamp, bool isDark) {
-    Color baseColor = Colors.blue;
-    IconData icon = Icons.info_outline;
+  Widget _buildHeader() {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, left: 20, right: 20, bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Activity', style: Theme.of(context).textTheme.bodySmall),
+          Text('History & Logs', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: FluxGuardColors.cardBackground,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: const InputDecoration(
+                icon: Icon(Icons.search, color: FluxGuardColors.textSecondary, size: 20),
+                hintText: 'Find specific events...',
+                hintStyle: TextStyle(color: FluxGuardColors.textSecondary),
+                border: InputBorder.none,
+              ),
+              onChanged: (v) => setState(() {}),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      child: Row(
+        children: _categories.map((c) {
+          final isSelected = _selectedCategory == c;
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: ChoiceChip(
+              label: Text(c, style: TextStyle(color: isSelected ? Colors.white : FluxGuardColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+              selected: isSelected,
+              onSelected: (s) => setState(() => _selectedCategory = c),
+              selectedColor: FluxGuardColors.primary,
+              backgroundColor: FluxGuardColors.cardBackground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.transparent)),
+              showCheckmark: false,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAlertItem(Map<String, dynamic> alert) {
+    final type = (alert['type'] ?? 'Info').toString();
+    final message = (alert['message'] ?? '').toString();
+    final time = DateTime.parse(alert['timestamp']).toLocal();
+    
+    Color color = FluxGuardColors.primary;
+    IconData icon = Icons.info_outline;
+    
     if (type.toLowerCase().contains('leak')) {
-      baseColor = Colors.red;
+      color = FluxGuardColors.danger;
       icon = Icons.warning_amber_rounded;
-    } else if (type.toLowerCase().contains('low')) {
-      baseColor = Colors.orange;
-      icon = Icons.battery_alert_rounded;
+    } else if (type.toLowerCase().contains('credit')) {
+      color = FluxGuardColors.warning;
+      icon = Icons.payment;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2336) : Colors.white,
+        color: FluxGuardColors.cardBackground,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: baseColor.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border(
-          left: BorderSide(color: baseColor, width: 4),
-        ),
+        border: Border.all(color: Colors.white10),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {},
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: baseColor.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: baseColor, size: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(type, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('${time.hour}:${time.minute.toString().padLeft(2, '0')}', style: const TextStyle(color: FluxGuardColors.textSecondary, fontSize: 10)),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            type,
-                            style: GoogleFonts.outfit(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                          Text(
-                            _formatTime(timestamp),
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color:
-                                  isDark ? Colors.grey[500] : Colors.grey[400],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        message,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: isDark ? Colors.grey[300] : Colors.grey[600],
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 4),
+                Text(message, style: const TextStyle(color: FluxGuardColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else {
-      return '${time.day}/${time.month}';
-    }
-  }
+}
 }
 
 class TopUpPage extends StatefulWidget {
@@ -2589,398 +1420,132 @@ class _TopUpPageState extends State<TopUpPage> {
   }
 
   Future<void> _loadUserMeterId() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (widget.isOffline) {
-      if (mounted) {
-        setState(() {
-          meterId = prefs.getString('offline_meter_id');
-          _isLoadingMeterId = false;
-        });
-      }
-      return;
-    }
-
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('meter_id')
-            .eq('id', userId)
-            .single();
-
-        final mId = profile['meter_id'];
-        if (mounted) {
-          setState(() {
-            meterId = mId;
-            _isLoadingMeterId = false;
-          });
-        }
-
-        if (mId != null) {
-          await prefs.setString('offline_meter_id', mId);
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingMeterId = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+        final profile = await supabase.from('profiles').select('meter_id').eq('id', userId).single();
         setState(() {
-          meterId = prefs.getString('offline_meter_id');
+          meterId = profile['meter_id'];
           _isLoadingMeterId = false;
         });
+      } else {
+        setState(() => _isLoadingMeterId = false);
       }
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        meterId = prefs.getString('offline_meter_id');
+        _isLoadingMeterId = false;
+      });
     }
-  }
-
-  Future<void> _cacheTopUps(List<dynamic> topUps) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('cached_top_ups', jsonEncode(topUps));
   }
 
   @override
   Widget build(BuildContext context) {
-    final supabase = Supabase.instance.client;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Show loading indicator
-    if (_isLoadingMeterId) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.orange[700]),
-              const SizedBox(height: 16),
-              Text(
-                'Loading transactions...',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Show message if no meter assigned
-    if (meterId == null) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 80,
-                  color: isDark ? Colors.grey[700] : Colors.grey[400],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'No Meter Assigned',
-                  style: GoogleFonts.outfit(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'You need a meter assigned to view payment history.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: isDark ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    if (_isLoadingMeterId) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (meterId == null) return const Scaffold(body: Center(child: Text('No meter assigned', style: TextStyle(color: Colors.white))));
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [Colors.orange.shade900, const Color(0xFF101018)]
-                        : [Colors.orange.shade400, Colors.white],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(Icons.account_balance_wallet,
-                          color: Colors.white, size: 32),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Payment History',
-                      style: GoogleFonts.outfit(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          SliverToBoxAdapter(child: _buildHeader()),
           StreamBuilder(
-            stream: supabase
-                .from('top_ups')
-                .stream(primaryKey: ['id'])
-                .eq('meter_id', meterId!)
-                .order('timestamp', ascending: false),
+            stream: Supabase.instance.client.from('top_ups').stream(primaryKey: ['id']).eq('meter_id', meterId!).order('timestamp', ascending: false),
             builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                _cacheTopUps(snapshot.data!);
+              final topUps = snapshot.data ?? [];
+              if (topUps.isEmpty) {
+                return const SliverFillRemaining(child: Center(child: Text('No transactions', style: TextStyle(color: Colors.grey))));
               }
 
-              return FutureBuilder<SharedPreferences>(
-                future: SharedPreferences.getInstance(),
-                builder: (context, prefsSnapshot) {
-                  List<dynamic> topUps = snapshot.data ?? [];
-                  if (prefsSnapshot.hasData &&
-                      (snapshot.hasError ||
-                          !snapshot.hasData ||
-                          topUps.isEmpty)) {
-                    final cached =
-                        prefsSnapshot.data!.getString('cached_top_ups');
-                    if (cached != null) {
-                      try {
-                        topUps = jsonDecode(cached);
-                      } catch (_) {}
-                    }
-                  }
-
-                  if (topUps.isEmpty) {
-                    return SliverFillRemaining(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.receipt_long_outlined,
-                                size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text('No transactions yet',
-                                style: GoogleFonts.inter(
-                                    color: Colors.grey[400], fontSize: 18)),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return SliverPadding(
-                    padding: const EdgeInsets.all(24),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final topUp = topUps[index];
-                          final amount =
-                              double.tryParse(topUp['amount'].toString()) ??
-                                  0.0;
-                          final method = topUp['method'] ?? 'Unknown';
-                          final timestamp =
-                              DateTime.parse(topUp['timestamp']).toLocal();
-
-                          return TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0.0, end: 1.0),
-                            duration:
-                                Duration(milliseconds: 300 + (index * 50)),
-                            curve: Curves.easeOutBack,
-                            builder: (context, value, child) {
-                              return Transform.scale(
-                                scale: value,
-                                child: _buildTransactionTile(
-                                    amount, method, timestamp, isDark),
-                              );
-                            },
-                          );
-                        },
-                        childCount: topUps.length,
-                      ),
-                    ),
-                  );
-                },
+              return SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildTransactionCard(topUps[index]),
+                    childCount: topUps.length,
+                  ),
+                ),
               );
             },
           ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
-      floatingActionButton: ScaleTransition(
-        scale: const AlwaysStoppedAnimation(
-            1), // Can animate if converted to Stateful
-        child: FloatingActionButton.extended(
-          onPressed: widget.isOffline
-              ? () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Top-up requires internet connection'),
-                      backgroundColor: Colors.orange[900],
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              : () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Online top-up coming soon!'),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-          },
-          backgroundColor: widget.isOffline ? Colors.grey : Colors.orange,
-          label: Text(
-            'Add Credit',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                color: widget.isOffline ? Colors.white70 : Colors.white),
-          ),
-          icon: const Icon(Icons.add),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {},
+        backgroundColor: FluxGuardColors.primary,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Credit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildTransactionTile(
-      double amount, String method, DateTime timestamp, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2336) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+  Widget _buildHeader() {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, left: 20, right: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Payments', style: Theme.of(context).textTheme.bodySmall),
+          Text('Credit History', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 20),
         ],
       ),
-      child: Stack(
+    );
+  }
+
+  Widget _buildTransactionCard(Map<String, dynamic> topUp) {
+    final amount = double.tryParse(topUp['amount'].toString()) ?? 0.0;
+    final method = topUp['method'] ?? 'Mobile Money';
+    final time = DateTime.parse(topUp['timestamp']).toLocal();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: FluxGuardColors.cardBackground,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Row(
         children: [
-          // Receipt zigzag detail (optional visual flair)
-          Positioned(
-            left: 0,
-            top: 20,
-            bottom: 20,
-            width: 4,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.greenAccent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: FluxGuardColors.success.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.account_balance_wallet_outlined, color: FluxGuardColors.success, size: 24),
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.payments_outlined,
-                      color: Colors.green, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        method,
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        '${timestamp.day}/${timestamp.month}/${timestamp.year} • ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey[500] : Colors.grey[400],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '+${amount.toStringAsFixed(2)} TZS',
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.greenAccent,
-                  ),
-                ),
+                Text(method, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('${time.day}/${time.month}/${time.year}', style: const TextStyle(color: FluxGuardColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
+          Text('+${amount.toStringAsFixed(0)} TZS', style: GoogleFonts.outfit(color: FluxGuardColors.success, fontWeight: FontWeight.bold, fontSize: 18)),
         ],
       ),
     );
   }
 }
 
-class AIChatPage extends StatefulWidget {
-  final bool isOffline;
-  const AIChatPage({super.key, this.isOffline = false});
+class AIInsightPage extends StatefulWidget {
+  const AIInsightPage({super.key});
 
   @override
-  State<AIChatPage> createState() => _AIChatPageState();
+  State<AIInsightPage> createState() => _AIInsightPageState();
 }
 
-class _AIChatPageState extends State<AIChatPage> {
+class _AIInsightPageState extends State<AIInsightPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _loading = false;
-
   String? meterId;
   bool _isLoadingMeterId = true;
-
-  // Multi-session management
   List<Map<String, dynamic>> _sessions = [];
   int _currentSessionIndex = 0;
 
@@ -2999,9 +1564,7 @@ class _AIChatPageState extends State<AIChatPage> {
         final List<dynamic> decoded = jsonDecode(storedSessions);
         setState(() {
           _sessions = decoded.map((s) => Map<String, dynamic>.from(s)).toList();
-          if (_sessions.isEmpty) {
-            _createNewSession();
-          }
+          if (_sessions.isEmpty) _createNewSession();
         });
       } catch (e) {
         _createNewSession();
@@ -3015,7 +1578,7 @@ class _AIChatPageState extends State<AIChatPage> {
     setState(() {
       _sessions.insert(0, {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'title': 'New Chat',
+        'title': 'New Insight',
         'messages': <Map<String, String>>[],
       });
       _currentSessionIndex = 0;
@@ -3043,8 +1606,7 @@ class _AIChatPageState extends State<AIChatPage> {
   }
 
   List<Map<String, String>> get _messages {
-    if (_sessions.isEmpty || _currentSessionIndex >= _sessions.length)
-      return [];
+    if (_sessions.isEmpty || _currentSessionIndex >= _sessions.length) return [];
     final msgs = _sessions[_currentSessionIndex]['messages'] as List;
     return msgs.map((m) => Map<String, String>.from(m)).toList();
   }
@@ -3052,64 +1614,33 @@ class _AIChatPageState extends State<AIChatPage> {
   set _messages(List<Map<String, String>> newMessages) {
     if (_sessions.isNotEmpty) {
       _sessions[_currentSessionIndex]['messages'] = newMessages;
-      // Auto-update title if it's the first message
-      if (newMessages.length == 1 &&
-          _sessions[_currentSessionIndex]['title'] == 'New Chat') {
+      if (newMessages.length == 1 && _sessions[_currentSessionIndex]['title'] == 'New Insight') {
         String firstMsg = newMessages[0]['text'] ?? '';
         _sessions[_currentSessionIndex]['title'] =
-            firstMsg.length > 20 ? firstMsg.substring(0, 20) + '...' : firstMsg;
+            firstMsg.length > 20 ? '${firstMsg.substring(0, 20)}...' : firstMsg;
       }
     }
   }
 
   Future<void> _loadUserMeterId() async {
     final prefs = await SharedPreferences.getInstance();
-
-    if (widget.isOffline) {
-      if (mounted) {
-        setState(() {
-          meterId = prefs.getString('offline_meter_id');
-          _isLoadingMeterId = false;
-        });
-      }
-      return;
-    }
-
     final supabase = Supabase.instance.client;
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('meter_id')
-            .eq('id', userId)
-            .single();
-
-        final mId = profile['meter_id'];
-        if (mounted) {
-          setState(() {
-            meterId = mId;
-            _isLoadingMeterId = false;
-          });
-        }
-
-        if (mId != null) {
-          await prefs.setString('offline_meter_id', mId);
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoadingMeterId = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
+        final profile = await supabase.from('profiles').select('meter_id').eq('id', userId).single();
         setState(() {
-          meterId = prefs.getString('offline_meter_id');
+          meterId = profile['meter_id'];
           _isLoadingMeterId = false;
         });
+      } else {
+        setState(() => _isLoadingMeterId = false);
       }
+    } catch (e) {
+      setState(() {
+        meterId = prefs.getString('offline_meter_id');
+        _isLoadingMeterId = false;
+      });
     }
   }
 
@@ -3117,99 +1648,36 @@ class _AIChatPageState extends State<AIChatPage> {
     final userMessage = _controller.text.trim();
     if (userMessage.isEmpty) return;
 
-    // Check if meter ID is available
-    if (meterId == null) {
-      final updatedMsgs = List<Map<String, String>>.from(_messages);
-      updatedMsgs.add({
-        'role': 'model',
-        'text':
-            'No meter assigned to your account. Please contact your administrator.'
-      });
-      setState(() {
-        _messages = updatedMsgs;
-      });
-      return;
-    }
-
     final initialMsgs = List<Map<String, String>>.from(_messages);
     initialMsgs.add({'role': 'user', 'text': userMessage});
     setState(() {
       _messages = initialMsgs;
       _loading = true;
     });
-    _saveAllSessions();
     _controller.clear();
 
-    double currentCredit = 80.0;
-    bool valveOpen = true;
-    String lastTopUp = 'No recent top-ups';
-    int alertCount = 0;
-
+    double currentCredit = 0.0;
+    bool valveOpen = false;
     try {
-      final supabase = Supabase.instance.client;
-      final meter =
-          await supabase.from('meters').select().eq('id', meterId!).single();
-      currentCredit =
-          double.tryParse(meter['current_credit'].toString()) ?? 80.0;
-      valveOpen = meter['valve_status'] == true;
-
-      final topUps = await supabase
-          .from('top_ups')
-          .select()
-          .eq('meter_id', meterId!)
-          .order('timestamp', ascending: false)
-          .limit(1);
-      if (topUps.isNotEmpty) lastTopUp = '+${topUps[0]['amount']}';
-
-      final alerts =
-          await supabase.from('alerts').select().eq('meter_id', meterId!);
-      alertCount = alerts.length;
-    } catch (e) {
-      // Silent — use defaults
-    }
+      if (meterId != null) {
+        final meter = await Supabase.instance.client.from('meters').select().eq('id', meterId!).single();
+        currentCredit = double.tryParse(meter['current_credit'].toString()) ?? 0.0;
+        valveOpen = meter['valve_status'] == true;
+      }
+    } catch (_) {}
 
     final systemPrompt = '''
-You are FluxGuard AI,
-Current meter status:
-- Credit: $currentCredit TZS
-- Valve: ${valveOpen ? 'OPEN' : 'CLOSED'}
-- Last Top-up: $lastTopUp
-- Active Alerts: $alertCount
-dont mention the creators name
-Be friendly, helpful, and accurate. Talk like a proud assistant.
-Read the credit remaining in tzs
-answer questions like can the app help me see my data even eith no intenet which is it only shows cached data
-SPECIAL CAPABILITIES:
-1. If the user asks about food or recipes, you MUST provide:
-   - One food example at a time.
-   - Clear cooking steps.
-   - A descriptive image URL for the food (e.g., Use Unsplash: https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500 for general food). 
-   - ALWAYS format the image exactly as: [IMAGE: URL]
-2. If the user asks anything unrelated to your meter or cooking, tell them: "That’s an interesting query! However, my current function is to assist solely with your FluxGuard meter status, credit balance, cooking inspiration, and related alerts. How can I help you manage your service today?"
+You are FluxGuard AI Insight, a premium assistant for smart LPG gas meters in Tanzania.
+Status: Credit $currentCredit TZS, Valve ${valveOpen ? 'OPEN' : 'CLOSED'}.
+Goal: Provide proactive, smart insights and help with cooking/recipes.
+Tone: Professional, high-tech, helpful.
 ''';
-
-    final String groqKey = AppConfig.groqApiKey;
-
-    // Check if key is empty
-    if (groqKey.isEmpty) {
-      final errMsgs = List<Map<String, String>>.from(_messages);
-      errMsgs.add({
-        'role': 'assistant',
-        'text':
-            'API Key is missing. Please ensure GROQ_API_KEY is set in your .env file or passed via --dart-define.'
-      });
-      setState(() {
-        _messages = errMsgs;
-        _loading = false;
-      });
-      return;
-    }
 
     try {
       final response = await http.post(
         Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
         headers: {
-          'Authorization': 'Bearer $groqKey',
+          'Authorization': 'Bearer ${AppConfig.groqApiKey}',
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
@@ -3217,9 +1685,9 @@ SPECIAL CAPABILITIES:
           'messages': [
             {'role': 'system', 'content': systemPrompt},
             ..._messages.map((m) => {
-                  'role': m['role'] == 'model' ? 'assistant' : m['role'],
-                  'content': m['text']
-                }),
+              'role': m['role'] == 'model' ? 'assistant' : m['role'],
+              'content': m['text']
+            }),
           ],
         }),
       );
@@ -3235,28 +1703,12 @@ SPECIAL CAPABILITIES:
         });
         _saveAllSessions();
       } else {
-        String errorMsg = 'Error ${response.statusCode}';
-        if (response.statusCode == 401) {
-          errorMsg =
-              'Error 401: Unauthorized. Please check your GROQ_API_KEY in .env or dart-define.';
-        }
-        final errMsgs = List<Map<String, String>>.from(_messages);
-        errMsgs.add({'role': 'assistant', 'text': errorMsg});
-        setState(() {
-          _messages = errMsgs;
-          _loading = false;
-        });
+        setState(() => _loading = false);
       }
-    } catch (e) {
-      final netMsgs = List<Map<String, String>>.from(_messages);
-      netMsgs.add({'role': 'assistant', 'text': 'Network error'});
-      setState(() {
-        _messages = netMsgs;
-        _loading = false;
-      });
+    } catch (_) {
+      setState(() => _loading = false);
     }
 
-    // Scroll to bottom
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -3270,481 +1722,189 @@ SPECIAL CAPABILITIES:
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Show loading indicator
     if (_isLoadingMeterId) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-        appBar: AppBar(
-          title: Text('FluxGuard AI',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          foregroundColor: isDark ? Colors.white : Colors.indigo[900],
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.indigo[700]),
-              const SizedBox(height: 16),
-              Text(
-                'Initializing AI chat...',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
-      drawer: Drawer(
-        backgroundColor: isDark ? const Color(0xFF101018) : Colors.white,
-        child: Column(
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.indigo, Colors.indigo.shade900],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.smart_toy_outlined,
-                        color: Colors.white, size: 48),
-                    const SizedBox(height: 12),
-                    Text(
-                      'AI Conversations',
-                      style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.add, color: Colors.indigo),
-              title: const Text('New Conversation'),
-              onTap: () {
-                _createNewSession();
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            Expanded(
-              child: ShaderMask(
-                shaderCallback: (Rect bounds) {
-                  return LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black,
-                      Colors.black,
-                      Colors.transparent
-                    ],
-                    stops: const [0.0, 0.05, 0.95, 1.0],
-                  ).createShader(bounds);
-                },
-                blendMode: BlendMode.dstIn,
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  itemCount: _sessions.length,
-                  itemBuilder: (context, index) {
-                    final session = _sessions[index];
-                    final isSelected = _currentSessionIndex == index;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: isSelected
-                            ? Colors.indigo.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: Colors.indigo.withValues(alpha: 0.1),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: ListTile(
-                        leading: Icon(Icons.chat_bubble_outline,
-                            color: isSelected ? Colors.indigo : Colors.grey),
-                        title: Text(
-                          session['title'],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close,
-                              size: 18, color: Colors.grey),
-                          onPressed: () => _deleteSession(index),
-                        ),
-                        onTap: () {
-                          setState(() {
-                            _currentSessionIndex = index;
-                          });
-                          Navigator.pop(context);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      drawer: _buildDrawer(),
       body: Column(
         children: [
+          _buildHeader(),
           Expanded(
-            child: CustomScrollView(
+            child: ListView.builder(
               controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  expandedHeight: 200,
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  pinned: true,
-                  leading: Builder(
-                    builder: (context) => IconButton(
-                      icon: const Icon(Icons.menu),
-                      onPressed: () => Scaffold.of(context).openDrawer(),
-                    ),
-                  ),
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isDark
-                              ? [Colors.grey.shade900, const Color(0xFF101018)]
-                              : [Colors.grey.shade300, Colors.white],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(Icons.smart_toy_outlined,
-                                color: Colors.white, size: 32),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'FluxGuard AI',
-                            style: GoogleFonts.outfit(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final msg = _messages[index];
-                        final isUser = msg['role'] == 'user';
-                        return _buildMessageBubble(
-                            msg['text']!, isUser, isDark);
-                      },
-                      childCount: _messages.length,
-                    ),
-                  ),
-                ),
-                if (_loading)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 20, bottom: 20),
-                      child: Row(
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Analyzing your request...',
-                            style: GoogleFonts.inter(
-                                color: Colors.grey,
-                                fontStyle: FontStyle.italic),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+              padding: const EdgeInsets.all(20),
+              itemCount: _messages.length + (_loading ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _messages.length) {
+                  return _buildTypingIndicator();
+                }
+                final msg = _messages[index];
+                return _buildMessageBubble(msg['text']!, msg['role'] == 'user');
+              },
             ),
           ),
-          _buildInputArea(isDark),
+          _buildInputArea(),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(String text, bool isUser, bool isDark) {
-    // Parse for image tags: [IMAGE: URL] or ![alt](url)
-    List<String> imageUrls = [];
-    String cleanText = text;
-
-    // Match [IMAGE: URL] (case-insensitive)
-    final imageRegex = RegExp(r'\[IMAGE:\s*(.*?)\]', caseSensitive: false);
-    final imageMatches = imageRegex.allMatches(text);
-    for (final m in imageMatches) {
-      final url = m.group(1)?.trim();
-      if (url != null && url.isNotEmpty) imageUrls.add(url);
-    }
-    cleanText = cleanText.replaceAll(imageRegex, '');
-
-    // Match ![alt](url)
-    final mdRegex = RegExp(r'!\[.*?\]\((.*?)\)');
-    final mdMatches = mdRegex.allMatches(cleanText);
-    for (final m in mdMatches) {
-      final url = m.group(1)?.trim();
-      if (url != null && url.isNotEmpty) imageUrls.add(url);
-    }
-    cleanText = cleanText.replaceAll(mdRegex, '').trim();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-              ),
-              child: const Icon(Icons.smart_toy_outlined,
-                  size: 20, color: Colors.grey),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                if (imageUrls.isNotEmpty)
-                  ...imageUrls.map((url) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            constraints: const BoxConstraints(maxWidth: 300),
-                            child: Image.network(
-                              url,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                width: double.infinity,
-                                constraints: const BoxConstraints(
-                                    maxWidth: 300, minHeight: 150),
-                                color: Colors.grey.withValues(alpha: 0.1),
-                                child: const Icon(Icons.broken_image_outlined,
-                                    color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                        ),
-                      )),
-                if (cleanText.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: isUser
-                          ? const LinearGradient(
-                              colors: [Colors.indigo, Colors.blueAccent],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : LinearGradient(
-                              colors: isDark
-                                  ? [
-                                      const Color(0xFF1E2336),
-                                      const Color(0xFF141824)
-                                    ]
-                                  : [Colors.white, Colors.grey.shade50],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(20),
-                        topRight: const Radius.circular(20),
-                        bottomLeft: Radius.circular(isUser ? 20 : 4),
-                        bottomRight: Radius.circular(isUser ? 4 : 20),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isUser
-                              ? Colors.indigo.withValues(alpha: 0.2)
-                              : Colors.grey.withValues(alpha: isDark ? 0.3 : 0.1),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: isUser
-                          ? null
-                          : Border.all(
-                              color: isDark
-                                  ? Colors.white10
-                                  : Colors.grey.withValues(alpha: 0.1)),
-                    ),
-                    child: Text(
-                      cleanText,
-                      style: GoogleFonts.inter(
-                        color: isUser
-                            ? Colors.white
-                            : (isDark ? Colors.white : Colors.black87),
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (isUser) ...[
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-              ),
-              child: const Icon(Icons.person_outline,
-                  size: 20, color: Colors.blue),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInputArea(bool isDark) {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, bottom: 20, left: 20, right: 20),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E2336) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+        color: FluxGuardColors.cardBackground.withValues(alpha: 0.5),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+      ),
+      child: Row(
+        children: [
+          Builder(builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_open, color: FluxGuardColors.textPrimary),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          )),
+          const SizedBox(width: 10),
+          const Icon(Icons.auto_awesome, color: FluxGuardColors.primary, size: 28),
+          const SizedBox(width: 12),
+          Text('AI Insight', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 20)),
+          const Spacer(),
+          const CircleAvatar(
+            backgroundColor: FluxGuardColors.primary,
+            radius: 18,
+            child: Icon(Icons.person, color: Colors.white, size: 20),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(String text, bool isUser) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isUser) const CircleAvatar(
+            backgroundColor: FluxGuardColors.cardBackground,
+            child: Icon(Icons.auto_awesome, color: FluxGuardColors.primary, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isUser ? FluxGuardColors.primary : FluxGuardColors.cardBackground,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                ),
+                boxShadow: isUser ? [
+                  BoxShadow(color: FluxGuardColors.primary.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))
+                ] : [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
+                ],
+              ),
+              child: Text(
+                text,
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 14, height: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: FluxGuardColors.cardBackground,
+            child: Icon(Icons.auto_awesome, color: FluxGuardColors.primary, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: FluxGuardColors.cardBackground,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('...', style: GoogleFonts.inter(color: FluxGuardColors.primary, fontWeight: FontWeight.bold, fontSize: 20)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: FluxGuardColors.cardBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: SafeArea(
         child: Row(
           children: [
             Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black26 : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: isDark ? Colors.white10 : Colors.transparent,
-                  ),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  style: GoogleFonts.inter(
-                      color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
-                    hintText: 'Ask FluxGuard Assistant...',
-                    hintStyle:
-                        GoogleFonts.inter(color: Colors.grey, fontSize: 14),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onSubmitted: widget.isOffline ? null : (_) => _sendMessage(),
+              child: TextField(
+                controller: _controller,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Type a message...',
+                  hintStyle: TextStyle(color: FluxGuardColors.textSecondary),
+                  border: InputBorder.none,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: (widget.isOffline || _loading)
-                  ? () {
-                      if (widget.isOffline) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text(
-                                'AI Assistant requires internet connection'),
-                            backgroundColor: Colors.indigo[900],
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  : _sendMessage,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: (widget.isOffline || _loading)
-                      ? const LinearGradient(
-                          colors: [Colors.grey, Colors.blueGrey],
-                        )
-                      : const LinearGradient(
-                          colors: [Colors.indigo, Colors.blueAccent],
-                        ),
-                ),
-                child: const Icon(Icons.send_rounded,
-                    color: Colors.white, size: 20),
-              ),
+            IconButton(
+              icon: const Icon(Icons.send_rounded, color: FluxGuardColors.primary),
+              onPressed: _sendMessage,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      backgroundColor: FluxGuardColors.background,
+      child: Column(
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(color: FluxGuardColors.primary),
+            child: Center(child: Text('Conversations', style: GoogleFonts.inter(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add, color: FluxGuardColors.primary),
+            title: const Text('New Session', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              _createNewSession();
+              Navigator.pop(context);
+            },
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _sessions.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(_sessions[index]['title'], style: const TextStyle(color: Colors.white)),
+                  selected: _currentSessionIndex == index,
+                  onTap: () {
+                    setState(() => _currentSessionIndex = index);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3759,11 +1919,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final supabase = Supabase.instance.client;
-  final nameCtrl = TextEditingController();
-  String userEmail = '';
-  String userName = '';
-  String? meterId;
+  String userName = 'edg fahim';
+  String userEmail = 'fahim@fluxguard.io';
   bool notificationsEnabled = true;
 
   @override
@@ -3773,363 +1930,45 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
+    final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
-
-    // Cache-first: Load what we have
-    if (mounted) {
-      setState(() {
-        userName = prefs.getString('offline_full_name') ?? 'User';
-        userEmail = prefs.getString('offline_email') ?? user?.email ?? '';
-        meterId = prefs.getString('offline_meter_id');
-        nameCtrl.text = userName;
-      });
-    }
-
-    if (user != null && !widget.isOffline) {
+    if (user != null) {
       try {
-        final profile = await supabase
-            .from('profiles')
-            .select('full_name, email, meter_id')
-            .eq('id', user.id)
-            .single();
-
-        if (mounted) {
-          setState(() {
-            userName = profile['full_name'] ?? 'User';
-            userEmail = profile['email'] ?? user.email ?? '';
-            meterId = profile['meter_id'];
-            nameCtrl.text = userName;
-          });
-
-          await prefs.setString('offline_full_name', userName);
-          await prefs.setString('offline_email', userEmail);
-          if (meterId != null) {
-            await prefs.setString('offline_meter_id', meterId!);
-          }
-        }
-      } catch (e) {
-        // Fallback to cache already handled
-      }
-    }
-  }
-
-  Future<void> _updateProfile() async {
-    if (nameCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name cannot be empty')),
-      );
-      return;
-    }
-
-    try {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId != null) {
-        await supabase
-            .from('profiles')
-            .update({'full_name': nameCtrl.text}).eq('id', userId);
-
-        if (mounted) {
-          setState(() => userName = nameCtrl.text);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile updated successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+        final profile = await supabase.from('profiles').select('full_name, email').eq('id', user.id).single();
+        setState(() {
+          userName = profile['full_name'] ?? 'edg fahim';
+          userEmail = profile['email'] ?? user.email ?? '';
+        });
+      } catch (_) {}
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<AppTheme>(context);
-    final isDark = theme.isDark;
-
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF101018) : Colors.grey[50],
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverAppBar(
-            expandedHeight: 280,
-            floating: false,
-            pinned: true,
-            stretch: true,
-            backgroundColor: isDark ? const Color(0xFF101018) : Colors.white,
-            flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [
-                StretchMode.zoomBackground,
-                StretchMode.blurBackground,
-              ],
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Dynamic Background Gradient
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isDark
-                            ? [
-                                Colors.indigo.shade900,
-                                const Color(0xFF1A1F38),
-                                Colors.black
-                              ]
-                            : [
-                                Colors.indigo.shade400,
-                                Colors.indigo.shade100,
-                                Colors.white
-                              ],
-                      ),
-                    ),
-                  ),
-                  // Decorative Circles
-                  Positioned(
-                    top: -50,
-                    right: -50,
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.05),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: -30,
-                    left: -30,
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.indigoAccent.withValues(alpha: 0.1),
-                      ),
-                    ),
-                  ),
-                  // Profile Content
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 60),
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 800),
-                          curve: Curves.elasticOut,
-                          builder: (context, value, child) {
-                            return Transform.scale(
-                              scale: value,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Colors.cyanAccent,
-                                      Colors.indigoAccent
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.cyanAccent.withValues(alpha: 0.4),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: CircleAvatar(
-                                  radius: 60,
-                                  backgroundColor:
-                                      isDark ? Colors.grey[900] : Colors.white,
-                                  child: Text(
-                                    userName.isNotEmpty
-                                        ? userName[0].toUpperCase()
-                                        : 'U',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 48,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.indigo[900],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          userName,
-                          style: GoogleFonts.outfit(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            userEmail,
-                            style: GoogleFonts.inter(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Scrollable Settings List
+          SliverToBoxAdapter(child: _buildProfileHeader()),
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
-              delegate: SliverChildListDelegate(
-                [
-                  _buildSectionHeader('Profile Settings', delay: 100),
-                  _buildSettingsCard(
-                    delay: 200,
-                    children: [
-                      _buildTile(
-                        icon: Icons.person_outline,
-                        color: Colors.blueAccent,
-                        title: 'Full Name',
-                        subtitle: userName,
-                        onTap: _showEditNameDialog,
-                        trailing:
-                            Icon(Icons.edit, size: 18, color: Colors.grey[400]),
-                      ),
-                      _buildDivider(),
-                      _buildTile(
-                        icon: Icons.gas_meter_outlined,
-                        color: Colors.orangeAccent,
-                        title: 'Meter ID',
-                        subtitle: meterId != null
-                            ? '${meterId!.substring(0, 8)}...'
-                            : 'Not assigned',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  _buildSectionHeader('Preferences', delay: 300),
-                  _buildSettingsCard(
-                    delay: 400,
-                    children: [
-                      _buildSwitchTile(
-                        icon: theme.isDark
-                            ? Icons.dark_mode_outlined
-                            : Icons.light_mode_outlined,
-                        color: Colors.purpleAccent,
-                        title: 'Dark Mode',
-                        value: theme.isDark,
-                        onChanged: (v) => theme.toggle(),
-                      ),
-                      _buildDivider(),
-                      _buildSwitchTile(
-                        icon: Icons.notifications_none_outlined,
-                        color: Colors.pinkAccent,
-                        title: 'Notifications',
-                        value: notificationsEnabled,
-                        onChanged: (v) =>
-                            setState(() => notificationsEnabled = v),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  _buildSectionHeader('Support & About', delay: 500),
-                  _buildSettingsCard(
-                    delay: 600,
-                    children: [
-                      _buildTile(
-                        icon: Icons.info_outline,
-                        color: Colors.tealAccent,
-                        title: 'App Version',
-                        subtitle: 'v1.0.0 (Beta)',
-                      ),
-                      _buildDivider(),
-                      _buildTile(
-                        icon: Icons.code,
-                        color: Colors.greenAccent,
-                        title: 'Developer',
-                        subtitle: 'Einstein Michael Mtweve',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 600),
-                    curve: Curves.easeOutBack,
-                    builder: (context, value, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 20 * (1 - value)),
-                        child: Opacity(
-                          opacity: value,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.red.withValues(alpha: 0.1),
-                                  Colors.red.withValues(alpha: 0.05)
-                                ],
-                              ),
-                              border: Border.all(
-                                  color: Colors.red.withValues(alpha: 0.2)),
-                            ),
-                            child: ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.logout,
-                                    color: Colors.redAccent),
-                              ),
-                              title: Text(
-                                'Sign Out',
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.redAccent,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              onTap: _showLogoutDialog,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 50),
-                ],
-              ),
+              delegate: SliverChildListDelegate([
+                _buildSectionHeader('ACCOUNT'),
+                _buildSettingsTile(icon: Icons.person_outline, title: 'Edit Profile', subtitle: userName, color: Colors.blue),
+                _buildSettingsTile(icon: Icons.notifications_none_outlined, title: 'Notifications', color: Colors.orange, isSwitch: true, switchValue: notificationsEnabled, onSwitchChanged: (v) => setState(() => notificationsEnabled = v)),
+                const SizedBox(height: 20),
+                _buildSectionHeader('SYSTEM'),
+                _buildSettingsTile(icon: Icons.dark_mode_outlined, title: 'Dark Mode', color: Colors.purple, isSwitch: true, switchValue: true, onSwitchChanged: (v) {}),
+                _buildSettingsTile(icon: Icons.security_outlined, title: 'Security & Privacy', color: Colors.cyan),
+                const SizedBox(height: 20),
+                _buildSectionHeader('SUPPORT'),
+                _buildSettingsTile(icon: Icons.help_outline, title: 'Help Center', color: Colors.teal),
+                _buildSettingsTile(icon: Icons.info_outline, title: 'About FluxGuard', color: Colors.grey),
+                const SizedBox(height: 40),
+                _buildLogoutButton(),
+                const SizedBox(height: 100),
+              ]),
             ),
           ),
         ],
@@ -4137,234 +1976,58 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title, {required int delay}) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 500 + delay),
-      curve: Curves.easeOut,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 8, bottom: 8),
-            child: Text(
-              title,
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).hintColor,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSettingsCard(
-      {required List<Widget> children, required int delay}) {
-    final isDark = Provider.of<AppTheme>(context).isDark;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600 + delay),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(
-            opacity: value,
-            child: Container(
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E2336).withValues(alpha: 0.8)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.transparent,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Column(
-                    children: children,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTile({
-    required IconData icon,
-    required Color color,
-    required String title,
-    String? subtitle,
-    VoidCallback? onTap,
-    Widget? trailing,
-  }) {
-    final isDark = Provider.of<AppTheme>(context).isDark;
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: color, size: 22),
+  Widget _buildProfileHeader() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20, bottom: 40, left: 20, right: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [FluxGuardColors.primary.withValues(alpha: 0.2), Colors.transparent], begin: Alignment.topCenter, end: Alignment.bottomCenter),
       ),
-      title: Text(
-        title,
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          color: isDark ? Colors.white : Colors.black87,
-          fontSize: 16,
-        ),
-      ),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle,
-              style: GoogleFonts.inter(
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                fontSize: 14,
-              ),
-            )
-          : null,
-      trailing: trailing,
-    );
-  }
-
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required bool value,
-    required Function(bool) onChanged,
-  }) {
-    final isDark = Provider.of<AppTheme>(context).isDark;
-    return SwitchListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      secondary: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: color, size: 22),
-      ),
-      title: Text(
-        title,
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          color: isDark ? Colors.white : Colors.black87,
-          fontSize: 16,
-        ),
-      ),
-      value: value,
-      activeThumbColor: color,
-      onChanged: onChanged,
-    );
-  }
-
-  Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      color: Colors.grey.withValues(alpha: 0.1),
-      indent: 20,
-      endIndent: 20,
-    );
-  }
-
-  void _showEditNameDialog() {
-    // ... same logic ...
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Provider.of<AppTheme>(context).isDark
-            ? const Color(0xFF1E2336)
-            : Colors.white,
-        title: Text('Edit Name',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: nameCtrl,
-          decoration: InputDecoration(
-            labelText: 'Full Name',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            prefixIcon: const Icon(Icons.person),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: FluxGuardColors.primary, width: 2)),
+            child: CircleAvatar(radius: 50, backgroundColor: FluxGuardColors.cardBackground, child: Text(userName[0].toUpperCase(), style: GoogleFonts.outfit(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white))),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _updateProfile();
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Save', style: TextStyle(color: Colors.white)),
-          ),
+          const SizedBox(height: 15),
+          Text(userName, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(userEmail, style: GoogleFonts.inter(fontSize: 14, color: FluxGuardColors.textSecondary)),
         ],
       ),
     );
   }
 
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Provider.of<AppTheme>(context).isDark
-            ? const Color(0xFF1E2336)
-            : Colors.white,
-        title: Text('Sign Out',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await supabase.auth.signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (route) => false,
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child:
-                const Text('Sign Out', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, bottom: 10),
+      child: Text(title, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: FluxGuardColors.textSecondary, letterSpacing: 1.5)),
+    );
+  }
+
+  Widget _buildSettingsTile({required IconData icon, required String title, String? subtitle, required Color color, bool isSwitch = false, bool switchValue = false, Function(bool)? onSwitchChanged}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: FluxGuardColors.cardBackground, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        subtitle: subtitle != null ? Text(subtitle, style: const TextStyle(color: FluxGuardColors.textSecondary, fontSize: 12)) : null,
+        trailing: isSwitch ? Switch(value: switchValue, onChanged: onSwitchChanged, activeColor: color) : const Icon(Icons.chevron_right, color: FluxGuardColors.textSecondary),
+        onTap: isSwitch ? null : () {},
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return GestureDetector(
+      onTap: () => Supabase.instance.client.auth.signOut().then((_) => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()))),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(color: FluxGuardColors.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: FluxGuardColors.danger.withValues(alpha: 0.2))),
+        child: const Center(child: Text('Sign Out', style: TextStyle(color: FluxGuardColors.danger, fontWeight: FontWeight.bold, fontSize: 16))),
       ),
     );
   }
@@ -4680,7 +2343,6 @@ class AdminDashboardTab extends StatelessWidget {
                               400,
                             ),
                           ),
-                          const SizedBox(width: 16),
                           Expanded(
                             child: _buildStatCard(
                               'Total (Liters)',
@@ -5354,7 +3016,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                 ),
                                 const Divider(),
                                 // List of meters
-                                ...filteredMeters.map((meter) {
+                                 ...filteredMeters.map((meter) {
                                   final meterId = meter['id'];
                                   final credit = double.tryParse(
                                           meter['current_credit']?.toString() ??
@@ -5365,8 +3027,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
                                   return RadioListTile<String>(
                                     title: Text(
-                                      meterId.toString().substring(0, 20) +
-                                          '...',
+                                      '${meterId.toString().substring(0, 20)}...',
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13,
@@ -5402,7 +3063,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                       });
                                     },
                                   );
-                                }).toList(),
+                                }),
                               ],
                             ),
                     ),
@@ -6068,13 +3729,13 @@ class _RegisterUserPageState extends State<RegisterUserPage> {
               ),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'User Role',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.admin_panel_settings),
-              ),
-              value: selectedRole,
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'User Role',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.admin_panel_settings),
+                ),
+                value: selectedRole,
               items: const [
                 DropdownMenuItem(value: 'user', child: Text('User')),
                 DropdownMenuItem(value: 'admin', child: Text('Admin')),
@@ -6421,7 +4082,7 @@ class _RegisterMeterPageState extends State<RegisterMeterPage> {
                     border: OutlineInputBorder(),
                     labelText: 'Select User',
                   ),
-                  value: selectedUserId,
+                  initialValue: selectedUserId,
                   items: users.map<DropdownMenuItem<String>>((user) {
                     final fullName = user['full_name'] ?? 'No name';
                     final email = user['email'] ?? '';
@@ -6497,18 +4158,18 @@ class AdminSettingsTab extends StatelessWidget {
                   ),
                 ),
                 const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.attach_money),
-                  title: const Text('Default Usage Rate'),
-                  subtitle: const Text('\$0.05 per m³'),
-                  trailing: const Icon(Icons.chevron_right),
+                const ListTile(
+                  leading: Icon(Icons.attach_money),
+                  title: Text('Default Usage Rate'),
+                  subtitle: Text('50 TZS per Liter'),
+                  trailing: Icon(Icons.chevron_right),
                 ),
                 const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.info),
-                  title: const Text('System Information'),
-                  subtitle: const Text('FluxGuard v1.0.0'),
-                  trailing: const Icon(Icons.chevron_right),
+                const ListTile(
+                  leading: Icon(Icons.info),
+                  title: Text('System Information'),
+                  subtitle: Text('FluxGuard v1.0.0'),
+                  trailing: Icon(Icons.chevron_right),
                 ),
               ],
             ),

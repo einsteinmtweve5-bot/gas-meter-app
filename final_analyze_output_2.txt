@@ -1,0 +1,274 @@
+Analyzing gas_meter_app...                                      
+
+  error • The argument type 'CardTheme' can't be assigned to the parameter type 'CardThemeData?'.  • lib/main.dart:121:16 • argument_type_not_assignable
+  error • The name 'AdminDashboardTab' isn't a class • lib/main.dart:574:15 • creation_with_non_type
+  error • The name 'AdminUsersTab' isn't a class • lib/main.dart:575:15 • creation_with_non_type
+  error • The name 'AdminMetersTab' isn't a class • lib/main.dart:576:15 • creation_with_non_type
+  error • The name 'AdminSettingsTab' isn't a class • lib/main.dart:577:15 • creation_with_non_type
+  error • The name 'SettingsPage' isn't a class • lib/main.dart:623:13 • creation_with_non_type
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/main.dart:664:35 • deprecated_member_use
+  error • 1 positional argument expected by '_buildLeakAlert', but 0 found • lib/main.dart:791:75 • not_enough_positional_arguments
+  error • The named parameter 'borderSide' isn't defined • lib/main.dart:1332:86 • undefined_named_parameter
+  error • The getter 'warning' isn't defined for the type 'FluxGuardColors' • lib/main.dart:1353:31 • undefined_getter
+  error • Expected a method, getter, setter or operator declaration • lib/main.dart:1394:1 • expected_executable
+warning • The declaration '_deleteSession' isn't referenced • lib/main.dart:1581:8 • unused_element
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1839:19 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1850:29 • prefer_const_constructors
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1852:30 • prefer_const_constructors
+  error • Undefined name '_isLoadingMeterId' • lib/main.dart:1910:9 • undefined_identifier
+  error • The function '_createNewSession' isn't defined • lib/main.dart:1974:17 • undefined_function
+   info • Use 'const' with the constructor to improve performance • lib/main.dart:1982:26 • prefer_const_constructors
+   info • Use 'const' literals as arguments to constructors of '@immutable' classes • lib/main.dart:1985:29 • prefer_const_literals_to_create_immutables
+  error • Undefined name '_sessions' • lib/main.dart:1997:30 • undefined_identifier
+  error • Undefined name '_sessions' • lib/main.dart:1999:37 • undefined_identifier
+  error • Undefined name '_currentSessionIndex' • lib/main.dart:2000:40 • undefined_identifier
+  error • The function '_deleteSession' isn't defined • lib/main.dart:2036:44 • undefined_function
+  error • The function 'setState' isn't defined • lib/main.dart:2039:27 • undefined_function
+  error • Undefined name '_currentSessionIndex' • lib/main.dart:2040:29 • undefined_identifier
+  error • Undefined name '_scrollController' • lib/main.dart:2057:27 • undefined_identifier
+  error • Undefined name '_messages' • lib/main.dart:2116:37 • undefined_identifier
+  error • Undefined name '_messages' • lib/main.dart:2121:35 • undefined_identifier
+  error • Undefined name '_loading' • lib/main.dart:2125:21 • undefined_identifier
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2325:1 • expected_identifier_but_got_keyword
+  error • Undefined name 'class' • lib/main.dart:2325:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2325:7 • expected_token
+  error • Undefined name 'SettingsPage' • lib/main.dart:2325:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2325:20 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2325:20 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2325:20 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2325:28 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2325:28 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2325:43 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2325:43 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:2326:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2326:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2333:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2333:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2333:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2333:7 • expected_token
+  error • Undefined name '_SettingsPageState' • lib/main.dart:2333:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2333:26 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2333:26 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2333:26 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2333:34 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2333:39 • undefined_operator
+  error • Undefined name 'SettingsPage' • lib/main.dart:2333:40 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2333:52 • equality_cannot_be_equality_operand
+  error • Expected to find ',' • lib/main.dart:2334:10 • expected_token
+  error • Undefined name 'userName' • lib/main.dart:2334:10 • undefined_identifier
+  error • Expected to find '}' • lib/main.dart:2334:32 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2448:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2448:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2448:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2448:7 • expected_token
+  error • Undefined name 'AdminPage' • lib/main.dart:2448:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2448:17 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2448:17 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2448:17 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2448:25 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2448:25 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2448:40 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2448:40 • list_element_type_not_assignable
+  error • The name 'AdminPage' isn't a class • lib/main.dart:2449:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2449:20 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2449:31 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2455:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2455:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2455:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2455:7 • expected_token
+  error • Undefined name '_AdminPageState' • lib/main.dart:2455:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2455:23 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2455:23 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2455:23 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2455:31 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2455:36 • undefined_operator
+  error • Undefined name 'AdminPage' • lib/main.dart:2455:37 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2455:46 • equality_cannot_be_equality_operand
+  error • 'with' can't be used as an identifier because it's a keyword • lib/main.dart:2456:5 • expected_identifier_but_got_keyword
+  error • Undefined name 'with' • lib/main.dart:2456:5 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2456:10 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2456:10 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2456:41 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2456:41 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:2457:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2457:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2645:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2645:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2645:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2645:7 • expected_token
+  error • Undefined name 'AdminDashboardTab' • lib/main.dart:2645:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2645:25 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2645:25 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2645:25 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2645:33 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2645:33 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2645:49 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2645:49 • list_element_type_not_assignable
+  error • The name 'AdminDashboardTab' isn't a class • lib/main.dart:2646:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2646:28 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2646:39 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2939:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2939:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2939:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2939:7 • expected_token
+  error • Undefined name 'AdminUsersTab' • lib/main.dart:2939:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2939:21 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2939:21 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2939:21 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2939:29 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:2939:29 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:2939:44 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:2939:44 • list_element_type_not_assignable
+  error • The name 'AdminUsersTab' isn't a class • lib/main.dart:2940:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:2940:24 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:2940:35 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:2946:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2946:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:2946:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2946:7 • expected_token
+  error • Undefined name '_AdminUsersTabState' • lib/main.dart:2946:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:2946:27 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:2946:27 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:2946:27 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:2946:35 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:2946:40 • undefined_operator
+  error • Undefined name 'AdminUsersTab' • lib/main.dart:2946:41 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:2946:54 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:2947:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:2947:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:3317:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3317:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:3317:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3317:7 • expected_token
+  error • Undefined name 'UserDetailPage' • lib/main.dart:3317:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:3317:22 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3317:22 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:3317:22 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3317:30 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:3317:30 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:3317:45 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:3317:45 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:3318:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:3318:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:3327:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3327:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:3327:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3327:7 • expected_token
+  error • Undefined name '_UserDetailPageState' • lib/main.dart:3327:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:3327:28 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:3327:28 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:3327:28 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:3327:36 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:3327:41 • undefined_operator
+  error • Undefined name 'UserDetailPage' • lib/main.dart:3327:42 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:3327:56 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:3328:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:3328:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4041:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4041:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4041:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4041:7 • expected_token
+  error • Undefined name 'RegisterUserPage' • lib/main.dart:4041:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4041:24 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4041:24 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4041:24 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4041:32 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4041:32 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4041:47 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4041:47 • list_element_type_not_assignable
+  error • The name 'RegisterUserPage' isn't a class • lib/main.dart:4042:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4042:27 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4042:38 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4048:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4048:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4048:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4048:7 • expected_token
+  error • Undefined name '_RegisterUserPageState' • lib/main.dart:4048:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4048:30 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4048:30 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4048:30 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4048:38 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:4048:43 • undefined_operator
+  error • Undefined name 'RegisterUserPage' • lib/main.dart:4048:44 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:4048:60 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:4049:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4049:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4186:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4186:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4186:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4186:7 • expected_token
+  error • Undefined name 'AdminMetersTab' • lib/main.dart:4186:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4186:22 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4186:22 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4186:22 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4186:30 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4186:30 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4186:46 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4186:46 • list_element_type_not_assignable
+  error • The name 'AdminMetersTab' isn't a class • lib/main.dart:4187:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4187:25 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4187:36 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4285:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4285:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4285:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4285:7 • expected_token
+  error • Undefined name 'MeterDetailPage' • lib/main.dart:4285:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4285:23 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4285:23 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4285:23 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4285:31 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4285:31 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4285:47 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4285:47 • list_element_type_not_assignable
+  error • Expected an identifier • lib/main.dart:4286:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4286:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4402:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4402:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4402:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4402:7 • expected_token
+  error • Undefined name 'RegisterMeterPage' • lib/main.dart:4402:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4402:25 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4402:25 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4402:25 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4402:33 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4402:33 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4402:48 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4402:48 • list_element_type_not_assignable
+  error • The name 'RegisterMeterPage' isn't a class • lib/main.dart:4403:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4403:28 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4403:39 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4409:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4409:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4409:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4409:7 • expected_token
+  error • Undefined name '_RegisterMeterPageState' • lib/main.dart:4409:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4409:31 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4409:31 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4409:31 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4409:39 • expected_token
+  error • The operator '<' isn't defined for the type 'Type' • lib/main.dart:4409:44 • undefined_operator
+  error • Undefined name 'RegisterMeterPage' • lib/main.dart:4409:45 • undefined_identifier
+  error • A comparison expression can't be an operand of another comparison expression • lib/main.dart:4409:62 • equality_cannot_be_equality_operand
+  error • Expected an identifier • lib/main.dart:4410:3 • missing_identifier
+  error • Expected to find '}' • lib/main.dart:4410:3 • expected_token
+  error • 'class' can't be used as an identifier because it's a keyword • lib/main.dart:4537:1 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4537:1 • expected_token
+  error • Undefined name 'class' • lib/main.dart:4537:1 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4537:7 • expected_token
+  error • Undefined name 'AdminSettingsTab' • lib/main.dart:4537:7 • undefined_identifier
+  error • 'extends' can't be used as an identifier because it's a keyword • lib/main.dart:4537:24 • expected_identifier_but_got_keyword
+  error • Expected to find ',' • lib/main.dart:4537:24 • expected_token
+  error • Undefined name 'extends' • lib/main.dart:4537:24 • undefined_identifier
+  error • Expected to find ',' • lib/main.dart:4537:32 • expected_token
+  error • The element type 'Type' can't be assigned to the list type 'Widget' • lib/main.dart:4537:32 • list_element_type_not_assignable
+  error • Expected to find ',' • lib/main.dart:4537:48 • expected_token
+  error • The element type 'Set<InvalidType>' can't be assigned to the list type 'Widget' • lib/main.dart:4537:48 • list_element_type_not_assignable
+  error • The name 'AdminSettingsTab' isn't a class • lib/main.dart:4538:9 • creation_with_non_type
+  error • Invalid context for 'super' invocation • lib/main.dart:4538:27 • super_in_invalid_context
+  error • Expected to find '}' • lib/main.dart:4538:38 • expected_token
+  error • Expected to find ';' • lib/main.dart:4613:1 • expected_token
+  error • Expected to find ')' • lib/main.dart:4614:1 • expected_token
+  error • Expected to find ']' • lib/main.dart:4614:1 • expected_token
+  error • Expected to find '}' • lib/main.dart:4614:1 • expected_token
+
+270 issues found. (ran in 2.9s)
