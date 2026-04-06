@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -490,11 +491,21 @@ class _HomeScreenState extends State<HomeScreen> {
   String _userRole = 'user'; // Default to user role
   bool _isLoadingRole = true;
   int _adminTabIndex = 0; // For admin tab navigation
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _fetchUserRole();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchUserRole() async {
@@ -577,6 +588,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    Widget currentScaffold;
+
     // If admin, show admin tabs instead of regular user navigation
     if (_userRole == 'admin') {
       final List<Widget> adminPages = [
@@ -586,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
         const AdminSettingsTab(),
       ];
 
-      return Scaffold(
+      currentScaffold = Scaffold(
         appBar: AppBar(
           title: Text(
               isOffline
@@ -620,74 +633,103 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       );
+    } else {
+      // Regular user navigation
+      final List<Widget> pages = [
+        DashboardPage(isOffline: isOffline),
+        ReportsPage(isOffline: isOffline),
+        const AlertsPage(),
+        const TopUpPage(),
+        const AIInsightPage(),
+        const SettingsPage(),
+      ];
+
+      final List<BottomNavigationBarItem> navItems = [
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined), 
+            activeIcon: Icon(Icons.home),
+            label: 'Dashboard'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart),
+            label: 'Reports'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_outlined),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Alerts'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.credit_card_outlined),
+            activeIcon: Icon(Icons.credit_card),
+            label: 'Top-Ups'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.auto_awesome),
+            label: 'AI Insight'),
+        const BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Settings'),
+      ];
+
+      currentScaffold = Scaffold(
+        appBar: isOffline
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(24),
+                child: SafeArea(child: _buildOfflineBanner()),
+              )
+            : null,
+        body: pages[_selectedIndex],
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: FluxGuardColors.cardBackground,
+            selectedItemColor: FluxGuardColors.primary,
+            unselectedItemColor: FluxGuardColors.textSecondary,
+            selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11),
+            unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            items: navItems,
+          ),
+        ),
+      );
     }
 
-    // Regular user navigation
-    final List<Widget> pages = [
-      DashboardPage(isOffline: isOffline),
-      ReportsPage(isOffline: isOffline),
-      const AlertsPage(),
-      const TopUpPage(),
-      const AIInsightPage(),
-      const SettingsPage(),
-    ];
-
-    final List<BottomNavigationBarItem> navItems = [
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined), 
-          activeIcon: Icon(Icons.home),
-          label: 'Dashboard'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart_outlined),
-          activeIcon: Icon(Icons.bar_chart),
-          label: 'Reports'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_outlined),
-          activeIcon: Icon(Icons.notifications),
-          label: 'Alerts'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.credit_card_outlined),
-          activeIcon: Icon(Icons.credit_card),
-          label: 'Top-Ups'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.auto_awesome),
-          label: 'AI Insight'),
-      const BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          activeIcon: Icon(Icons.settings),
-          label: 'Settings'),
-    ];
-
-    return Scaffold(
-      appBar: isOffline
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(24),
-              child: SafeArea(child: _buildOfflineBanner()),
-            )
-          : null,
-      body: pages[_selectedIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: FluxGuardColors.cardBackground,
-          selectedItemColor: FluxGuardColors.primary,
-          unselectedItemColor: FluxGuardColors.textSecondary,
-          selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 11),
-          unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          items: navItems,
-        ),
-      ),
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      canRequestFocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            if (_userRole == 'admin' && _adminTabIndex < 3) {
+              _onAdminTabTapped(_adminTabIndex + 1);
+              return KeyEventResult.handled;
+            } else if (_userRole != 'admin' && _selectedIndex < 5) {
+              _onItemTapped(_selectedIndex + 1);
+              return KeyEventResult.handled;
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            if (_userRole == 'admin' && _adminTabIndex > 0) {
+              _onAdminTabTapped(_adminTabIndex - 1);
+              return KeyEventResult.handled;
+            } else if (_userRole != 'admin' && _selectedIndex > 0) {
+              _onItemTapped(_selectedIndex - 1);
+              return KeyEventResult.handled;
+            }
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: currentScaffold,
     );
   }
 }
@@ -703,7 +745,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
   String? meterId;
   String? userName;
-  bool? _localValveStatus;
+  bool? _localValveStatus = false;
   bool _isLoadingMeterId = true;
   MeterService? _meterService;
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -802,11 +844,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 padding: const EdgeInsets.all(20),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _buildCreditCard(credit),
+                    AnimatedGasPipe(credit: credit, valveOpen: valveOpen, velocity: velocity),
                     const SizedBox(height: 30),
                     _buildValveControls(valveOpen),
-                    const SizedBox(height: 30),
-                    _buildFlowGauge(velocity),
                     const SizedBox(height: 100),
                   ]),
                 ),
@@ -820,19 +860,35 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
   Widget _buildHeader() {
     return Padding(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, left: 20, right: 20, bottom: 10),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20, left: 20, right: 20, bottom: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Welcome Back,', style: Theme.of(context).textTheme.bodySmall),
-              Text(userName ?? 'edg fahim', style: Theme.of(context).textTheme.headlineMedium),
+              Text('Welcome Back,', style: GoogleFonts.inter(color: FluxGuardColors.textSecondary, fontSize: 16)),
+              const SizedBox(height: 8),
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  return Text(
+                    userName ?? 'edg fahim',
+                    style: GoogleFonts.outfit(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      shadows: [
+                        Shadow(color: FluxGuardColors.primary.withValues(alpha: 0.4 + (_pulseController.value * 0.6)), blurRadius: 10 + (_pulseController.value * 15))
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: FluxGuardColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
@@ -840,9 +896,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             ),
             child: Row(
               children: [
-                Container(width: 8, height: 8, decoration: const BoxDecoration(color: FluxGuardColors.success, shape: BoxShape.circle)),
+                Container(width: 10, height: 10, decoration: const BoxDecoration(color: FluxGuardColors.success, shape: BoxShape.circle)),
                 const SizedBox(width: 8),
-                Text('Connected', style: GoogleFonts.inter(color: FluxGuardColors.success, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text('Connected', style: GoogleFonts.inter(color: FluxGuardColors.success, fontSize: 14, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -909,23 +965,23 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.symmetric(vertical: 30),
         decoration: BoxDecoration(
           color: isActive ? color.withValues(alpha: 0.2) : FluxGuardColors.cardBackground,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(30),
           border: Border.all(color: isActive ? color : Colors.transparent, width: 2),
           boxShadow: isActive ? [
-            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 15, spreadRadius: 2)
+            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 5)
           ] : [],
         ),
         child: Column(
           children: [
             FadeTransition(
               opacity: isActive ? _pulseController : const AlwaysStoppedAnimation(1.0),
-              child: Icon(icon, color: isActive ? color : FluxGuardColors.textSecondary, size: 32),
+              child: Icon(icon, color: isActive ? color : FluxGuardColors.textSecondary, size: 48),
             ),
-            const SizedBox(height: 10),
-            Text(label, style: GoogleFonts.inter(color: isActive ? Colors.white : FluxGuardColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+            const SizedBox(height: 16),
+            Text(label, style: GoogleFonts.inter(color: isActive ? Colors.white : FluxGuardColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
       ),
@@ -1169,19 +1225,79 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Widget _buildLineChart() {
+    final currentData = [50.0, 70.0, 60.0, 80.0, 90.0, 75.0];
     return LineChart(
       LineChartData(
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 20,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: Colors.white.withValues(alpha: 0.05),
+              strokeWidth: 1,
+            );
+          },
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                const titles = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+                if (value.toInt() >= 0 && value.toInt() < titles.length) {
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: Text(
+                      titles[value.toInt()],
+                      style: GoogleFonts.inter(
+                        color: FluxGuardColors.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
+          leftTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
         borderData: FlBorderData(show: false),
+        minX: 0,
+        maxX: 5,
+        minY: 0,
+        maxY: 100,
         lineBarsData: [
           LineChartBarData(
-            spots: [const FlSpot(0, 3), const FlSpot(2, 5), const FlSpot(4, 4), const FlSpot(6, 8)],
+            spots: currentData.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
             isCurved: true,
             color: FluxGuardColors.primary,
             barWidth: 4,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: false),
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, percent, barData, index) {
+                return FlDotCirclePainter(
+                  radius: 4,
+                  color: Colors.white,
+                  strokeWidth: 2,
+                  strokeColor: FluxGuardColors.primary,
+                );
+              },
+            ),
             belowBarData: BarAreaData(show: true, color: FluxGuardColors.primary.withValues(alpha: 0.1)),
           ),
         ],
@@ -1190,16 +1306,92 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Widget _buildBarChart() {
+    final currentData = [50.0, 70.0, 60.0, 80.0, 90.0, 75.0];
+    final futureData = currentData.map((e) => e * 1.1).toList();
     return BarChart(
       BarChartData(
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
+        alignment: BarChartAlignment.spaceAround,
+        maxY: 120,
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => FluxGuardColors.primary.withValues(alpha: 0.8),
+            tooltipBorderRadius: BorderRadius.circular(8),
+            tooltipPadding: const EdgeInsets.all(8),
+            tooltipMargin: 8,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              return BarTooltipItem(
+                '${rod.toY.round()} Units',
+                const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            },
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                const titles = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                if (value.toInt() >= 0 && value.toInt() < titles.length) {
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: Text(
+                      titles[value.toInt()],
+                      style: GoogleFonts.inter(
+                        color: FluxGuardColors.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
+          leftTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 20,
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: Colors.white.withValues(alpha: 0.05),
+            strokeWidth: 1,
+          ),
+        ),
         borderData: FlBorderData(show: false),
-        barGroups: [
-          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 8, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
-          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 10, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
-          BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 14, color: FluxGuardColors.primary, width: 15, borderRadius: BorderRadius.circular(4))]),
-        ],
+        barGroups: futureData.asMap().entries.map((e) {
+          return BarChartGroupData(
+            x: e.key,
+            barRods: [
+              BarChartRodData(
+                toY: e.value,
+                color: FluxGuardColors.primary,
+                width: 16,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                backDrawRodData: BackgroundBarChartRodData(
+                  show: true,
+                  toY: 120,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              )
+            ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -1543,6 +1735,7 @@ class AIInsightPage extends StatefulWidget {
 class _AIInsightPageState extends State<AIInsightPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
   bool _loading = false;
   String? meterId;
   bool _isLoadingMeterId = true;
@@ -1554,6 +1747,24 @@ class _AIInsightPageState extends State<AIInsightPage> {
     super.initState();
     _loadUserMeterId();
     _loadAllSessions();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent + 200,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _loadAllSessions() async {
@@ -1572,6 +1783,7 @@ class _AIInsightPageState extends State<AIInsightPage> {
     } else {
       _createNewSession();
     }
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
   }
 
   void _createNewSession() {
@@ -1655,6 +1867,9 @@ class _AIInsightPageState extends State<AIInsightPage> {
       _loading = true;
     });
     _controller.clear();
+    _focusNode.requestFocus();
+    
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
 
     double currentCredit = 0.0;
     bool valveOpen = false;
@@ -1670,7 +1885,7 @@ class _AIInsightPageState extends State<AIInsightPage> {
 You are FluxGuard AI Insight, a premium assistant for smart LPG gas meters in Tanzania.
 Status: Credit $currentCredit TZS, Valve ${valveOpen ? 'OPEN' : 'CLOSED'}.
 Goal: Provide proactive, smart insights and help with cooking/recipes.
-Tone: Professional, high-tech, helpful.
+Tone: Professional, high-tech, helpful and make sure you do not mix information from the managers login in side to normal users like registering a new meter that only for manager user cant do that .
 ''';
 
     try {
@@ -1705,19 +1920,11 @@ Tone: Professional, high-tech, helpful.
       } else {
         setState(() => _loading = false);
       }
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     } catch (_) {
       setState(() => _loading = false);
+      Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     }
-
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   @override
@@ -1732,17 +1939,37 @@ Tone: Professional, high-tech, helpful.
         children: [
           _buildHeader(),
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(20),
-              itemCount: _messages.length + (_loading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length) {
-                  return _buildTypingIndicator();
-                }
-                final msg = _messages[index];
-                return _buildMessageBubble(msg['text']!, msg['role'] == 'user');
-              },
+            child: Stack(
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      'FLUX GUARD\nYOUR SMART GAS ASSISTANT',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white.withValues(alpha: 0.05),
+                        height: 1.2,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                  ),
+                ),
+                ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _messages.length + (_loading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length) {
+                      return _buildTypingIndicator();
+                    }
+                    final msg = _messages[index];
+                    return _buildMessageBubble(msg['text']!, msg['role'] == 'user');
+                  },
+                ),
+              ],
             ),
           ),
           _buildInputArea(),
@@ -1846,25 +2073,42 @@ Tone: Professional, high-tech, helpful.
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: FluxGuardColors.cardBackground,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       ),
       child: SafeArea(
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _controller,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: TextStyle(color: FluxGuardColors.textSecondary),
-                  border: InputBorder.none,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: FluxGuardColors.background,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  style: const TextStyle(color: Colors.white),
+                  onSubmitted: (_) => _sendMessage(),
+                  decoration: InputDecoration(
+                    hintText: 'Ask FluxGuard AI...',
+                    hintStyle: TextStyle(color: FluxGuardColors.textSecondary),
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.send_rounded, color: FluxGuardColors.primary),
-              onPressed: _sendMessage,
+            const SizedBox(width: 12),
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_upward_rounded, color: FluxGuardColors.background, size: 24),
+                onPressed: _sendMessage,
+              ),
             ),
           ],
         ),
@@ -1875,36 +2119,81 @@ Tone: Professional, high-tech, helpful.
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: FluxGuardColors.background,
-      child: Column(
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(color: FluxGuardColors.primary),
-            child: Center(child: Text('Conversations', style: GoogleFonts.inter(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))),
-          ),
-          ListTile(
-            leading: const Icon(Icons.add, color: FluxGuardColors.primary),
-            title: const Text('New Session', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              _createNewSession();
-              Navigator.pop(context);
-            },
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _sessions.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(_sessions[index]['title'], style: const TextStyle(color: Colors.white)),
-                  selected: _currentSessionIndex == index,
-                  onTap: () {
-                    setState(() => _currentSessionIndex = index);
-                    Navigator.pop(context);
-                  },
-                );
-              },
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _createNewSession();
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                label: Text('New Chat', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: FluxGuardColors.cardBackground,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  elevation: 0,
+                ),
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              child: Text(
+                'Recent',
+                style: GoogleFonts.inter(color: FluxGuardColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _sessions.length,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemBuilder: (context, index) {
+                  final isSelected = _currentSessionIndex == index;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected ? FluxGuardColors.cardBackground.withValues(alpha: 0.5) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                      visualDensity: VisualDensity.compact,
+                      title: Text(
+                        _sessions[index]['title'],
+                        style: GoogleFonts.inter(
+                          color: isSelected ? Colors.white : FluxGuardColors.textSecondary,
+                          fontSize: 14,
+                          fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () {
+                        setState(() => _currentSessionIndex = index);
+                        Navigator.pop(context);
+                        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+                      },
+                      trailing: isSelected ? IconButton(
+                        icon: const Icon(Icons.delete_outline, color: FluxGuardColors.textSecondary, size: 18),
+                        onPressed: () => _deleteSession(index),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ) : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4195,6 +4484,177 @@ class AdminSettingsTab extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class AnimatedGasPipe extends StatefulWidget {
+  final double credit;
+  final bool valveOpen;
+  final double velocity;
+  final double maxCredit;
+
+  const AnimatedGasPipe({
+    super.key,
+    required this.credit,
+    required this.valveOpen,
+    required this.velocity,
+    this.maxCredit = 100.0, // Assuming 100 is max, could scale dynamically
+  });
+
+  @override
+  State<AnimatedGasPipe> createState() => _AnimatedGasPipeState();
+}
+
+class _AnimatedGasPipeState extends State<AnimatedGasPipe> with SingleTickerProviderStateMixin {
+  late AnimationController _foxController;
+
+  @override
+  void initState() {
+    super.initState();
+    _foxController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _foxController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.valveOpen && _foxController.isAnimating) {
+      _foxController.stop();
+    } else if (widget.valveOpen && !_foxController.isAnimating) {
+      _foxController.repeat(reverse: true);
+    }
+
+    double creditRatio = (widget.credit / widget.maxCredit).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: FluxGuardColors.cardBackground,
+        borderRadius: BorderRadius.circular(36),
+        boxShadow: widget.valveOpen ? [
+          BoxShadow(color: Colors.orange.withValues(alpha: 0.1), blurRadius: 40, spreadRadius: 10)
+        ] : [],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Gas Supply', style: GoogleFonts.inter(color: FluxGuardColors.textSecondary, fontSize: 16)),
+              Text('${widget.credit.toStringAsFixed(1)} TZS', style: GoogleFonts.outfit(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 50),
+          
+          LayoutBuilder(
+            builder: (context, constraints) {
+              double maxWidth = constraints.maxWidth;
+              double currentGasWidth = (maxWidth - 80) * creditRatio;
+              
+              return SizedBox(
+                height: 180,
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // The Pipe Background
+                    Positioned(
+                      left: 0,
+                      bottom: 30,
+                      child: Container(
+                        height: 40,
+                        width: maxWidth - 70,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 2),
+                        ),
+                      ),
+                    ),
+                    
+                    // The Burning Gas (Credit remaining)
+                    Positioned(
+                      left: 2,
+                      bottom: 32,
+                      child: AnimatedContainer(
+                        duration: const Duration(seconds: 1),
+                        curve: Curves.easeInOut,
+                        height: 36,
+                        width: currentGasWidth.clamp(0.0, maxWidth - 74),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.blueAccent, Colors.orangeAccent],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: widget.valveOpen ? [
+                            BoxShadow(color: Colors.orange.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 2)
+                          ] : [],
+                        ),
+                      ),
+                    ),
+
+                    // The Running Fox
+                    AnimatedBuilder(
+                      animation: _foxController,
+                      builder: (context, child) {
+                        double maxFoxRun = currentGasWidth.clamp(0.0, maxWidth - 100);
+                        double leftPos = widget.valveOpen ? _foxController.value * maxFoxRun : 10;
+                        return Positioned(
+                          left: leftPos,
+                          bottom: 70,
+                          child: Opacity(
+                            opacity: widget.valveOpen ? 1.0 : 0.5, 
+                            child: const Text('🦊', style: TextStyle(fontSize: 54)),
+                          ),
+                        );
+                      },
+                    ),
+                      
+                    // The Stove/Fire at the end
+                    Positioned(
+                      right: 0,
+                      bottom: 15,
+                      child: AnimatedBuilder(
+                        animation: _foxController,
+                        builder: (context, child) {
+                          double scale = widget.valveOpen ? 1.0 + (_foxController.value * 0.15) : 1.0;
+                          return Transform.scale(
+                            scale: scale,
+                            child: Column(
+                              children: [
+                                Icon(Icons.local_fire_department, 
+                                  color: widget.valveOpen ? Colors.orangeAccent : Colors.grey.withValues(alpha: 0.2), 
+                                  size: widget.valveOpen ? 64 : 48,
+                                  shadows: widget.valveOpen ? [const Shadow(color: Colors.orange, blurRadius: 20)] : [],
+                                ),
+                                const SizedBox(height: 6),
+                                Container(
+                                  height: 8, width: 48,
+                                  decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(4)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      )
     );
   }
 }
